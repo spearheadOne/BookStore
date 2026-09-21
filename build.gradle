@@ -1,0 +1,52 @@
+plugins {
+    id "base"
+    id "org.springframework.boot" version "4.0.6" apply false
+    id "io.spring.dependency-management" version "1.1.7" apply false
+}
+
+group "org.abondar.experimental.bookstore"
+version "0.0.1"
+
+def serviceProjects = [
+        project(":book-service")
+]
+
+configure(serviceProjects) {
+    apply plugin: "java"
+    apply plugin: "idea"
+    apply plugin: "org.springframework.boot"
+    apply plugin: "io.spring.dependency-management"
+
+    group = rootProject.group
+    version = rootProject.version
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+
+    tasks.named("test") {
+        useJUnitPlatform()
+    }
+
+}
+
+tasks.named("build") {
+    dependsOn(
+            ":book-service:build"
+    )
+}
+
+tasks.register("test") {
+    group = "verification"
+    description = "Runs tests for all Gradle subprojects."
+    dependsOn(
+            ":book-service:test"
+    )
+}
