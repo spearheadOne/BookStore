@@ -4,8 +4,13 @@
 CREATE TABLE book
 (
     id    UUID PRIMARY KEY,
-    isbn  VARCHAR(17)  NOT NULL UNIQUE,
-    title VARCHAR(500) NOT NULL
+    isbn        TEXT NOT NULL UNIQUE,
+    title       TEXT NOT NULL,
+    description TEXT,
+    issue_year  INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+
 );
 
 --

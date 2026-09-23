@@ -2,3 +2,15 @@ databaseChangeLog:
   - include:
       file: changes/001-create-book-table.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/002-create-author-table.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/003-create-book-author-table.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/004-create-catalog-table.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/005-add-catalog-id-book.sql
+      relativeToChangelogFile: true
