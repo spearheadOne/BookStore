@@ -1,12 +1,19 @@
+plugins {
+    id "org.jooq.jooq-codegen-gradle" version "3.19.32"
+}
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-liquibase")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-test")
+    implementation("org.springframework.boot:spring-boot-starter-jooq")
 
     runtimeOnly("org.postgresql:postgresql")
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
+
+    jooqCodegen("org.postgresql:postgresql")
 
     testCompileOnly("org.projectlombok:lombok")
     testAnnotationProcessor("org.projectlombok:lombok")
@@ -14,4 +21,32 @@ dependencies {
 
 bootBuildImage {
     imageName = "abondar/bookstore-book-service"
+}
+
+def dbHost = System.getenv("DB_HOST") ?: "localhost"
+def dbPort = System.getenv("DB_PORT") ?: "5432"
+def dbName = System.getenv("DB_NAME") ?: "bookstore"
+
+jooq {
+    configuration {
+        jdbc {
+            driver = "org.postgresql.Driver"
+            url = System.getenv("DB_URL") ?: "jdbc:postgresql://${dbHost}:${dbPort}/${dbName}"
+            user = System.getenv("DB_USERNAME") ?: "book_user"
+            password = System.getenv("DB_PASSWORD") ?: "book_pass"
+        }
+
+        generator {
+            database {
+                name = "org.jooq.meta.postgres.PostgresDatabase"
+                inputSchema = "public"
+                includes = "book|author|book_author|catalog"
+            }
+
+            target {
+                packageName = "org.abondar.experimental.bookstore.adapter.out.persistence.generated"
+                directory = project.layout.buildDirectory.dir("generated-src/jooq/main").get().asFile.absolutePath
+            }
+        }
+    }
 }

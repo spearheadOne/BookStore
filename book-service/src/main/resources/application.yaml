@@ -12,6 +12,9 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
       keepalive-time: 300000
+  jooq:
+    sql-dialect: postgres
 
 server:
   port: ${SERVER_PORT:8080}
+
