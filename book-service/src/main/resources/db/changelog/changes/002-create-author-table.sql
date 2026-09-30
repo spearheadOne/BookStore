@@ -1,6 +1,6 @@
---liquibase formatted sql
+-- liquibase formatted sql
 
---changeset abondar:002
+-- changeset abondar:002
 CREATE TABLE author
 (
     id            UUID PRIMARY KEY,
@@ -20,4 +20,4 @@ CREATE TABLE author
     CONSTRAINT chk_author_lifespan
         CHECK (date_of_death IS NULL OR date_of_death >= date_of_birth)
 );
---rollback DROP TABLE author;
+-- rollback DROP TABLE author;

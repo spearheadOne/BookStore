@@ -1,6 +1,6 @@
---liquibase formatted sql
+-- liquibase formatted sql
 
---changeset abondar:001
+-- changeset abondar:001
 CREATE TABLE book
 (
     id    UUID PRIMARY KEY,
@@ -13,5 +13,4 @@ CREATE TABLE book
 
 );
 
---
-rollback DROP TABLE book;
+-- rollback DROP TABLE book;

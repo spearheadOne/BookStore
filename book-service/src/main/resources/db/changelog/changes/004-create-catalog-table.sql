@@ -1,6 +1,6 @@
---liquibase formatted sql
+-- liquibase formatted sql
 
---changeset abondar:004
+-- changeset abondar:004
 CREATE TABLE catalog
 (
     id   UUID PRIMARY KEY,
@@ -8,6 +8,4 @@ CREATE TABLE catalog
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
---
-rollback DROP TABLE catalog;
+-- rollback DROP TABLE catalog;

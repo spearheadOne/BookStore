@@ -1,6 +1,6 @@
---liquibase formatted sql
+-- liquibase formatted sql
 
---changeset abondar:003
+-- changeset abondar:003
 CREATE TABLE book_author
 (
     book_id      UUID    NOT NULL REFERENCES book (id),
@@ -16,5 +16,4 @@ CREATE TABLE book_author
         UNIQUE (book_id, author_order)
 );
 
---
-rollback DROP TABLE book_author;
+-- rollback DROP TABLE book_author;
