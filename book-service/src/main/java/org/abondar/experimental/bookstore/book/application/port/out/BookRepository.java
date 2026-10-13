@@ -24,7 +24,5 @@ public interface BookRepository {
 
     List<Book> findByCatalogId(Id<Catalog> catalogId);
 
-    void deleteAllByIds(List<Id<Book>> bookIds);
-
     void delete(Id<Book> id);
 }
