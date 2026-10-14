@@ -11,5 +11,7 @@ public interface CatalogRepository {
 
     Optional<Catalog> findById(Id<Catalog> catalogId);
 
+    Optional<Catalog> findByName(String name);
+
     void delete(Id<Catalog> catalogId);
 }
