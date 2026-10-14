@@ -21,6 +21,8 @@ public class BookService implements BookOperations {
 
         if (!exists) {
             bookRepository.save(book);
+        } else {
+            throw new IllegalArgumentException("Book already exists");
         }
     }
 
@@ -35,6 +37,8 @@ public class BookService implements BookOperations {
 
         if (exists) {
             bookRepository.save(book);
+        } else {
+            throw new IllegalArgumentException("Book does not exist");
         }
     }
 

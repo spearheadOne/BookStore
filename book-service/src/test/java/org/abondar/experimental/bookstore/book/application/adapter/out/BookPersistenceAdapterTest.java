@@ -1,5 +1,6 @@
 package org.abondar.experimental.bookstore.book.application.adapter.out;
 
+import org.abondar.experimental.bookstore.BaseAdapterTest;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.adapter.out.BookPersistenceAdapter;
 import org.abondar.experimental.bookstore.book.domain.Book;
@@ -7,15 +8,9 @@ import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
-import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Year;
 import java.util.List;
@@ -31,19 +26,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest
-public class BookPersistenceAdapterTest {
 
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer postgreSQLContainer = new PostgreSQLContainer("postgres:17-alpine");
+public class BookPersistenceAdapterTest extends BaseAdapterTest {
 
     @Autowired
     private BookPersistenceAdapter adapter;
-
-    @Autowired
-    private DSLContext dslContext;
 
     @Test
     public void saveAndFindBook() {
@@ -91,7 +78,7 @@ public class BookPersistenceAdapterTest {
     @Test
     public void findMissingBook() {
         assertAll(
-                () -> assertTrue(adapter.findById(Id.<Book>generate()).isEmpty()),
+                () -> assertTrue(adapter.findById(Id.generate()).isEmpty()),
                 () -> assertTrue(adapter.findByIsbn(new Isbn("9780321125217")).isEmpty())
         );
     }
@@ -149,25 +136,6 @@ public class BookPersistenceAdapterTest {
     }
 
     @Test
-    public void findBookIdsByAuthor() {
-        var authorId = insertAuthor("Selected");
-        var otherAuthorId = insertAuthor("Other");
-        var firstBook = Book.create(new Isbn("9780262033848"), new Text("First book"),
-                null, null, List.of(authorId), null);
-        var secondBook = Book.create(new Isbn("9780134757599"), new Text("Second book"),
-                null, null, List.of(authorId, otherAuthorId), null);
-        var otherBook = Book.create(new Isbn("9780596007126"), new Text("Other book"),
-                null, null, List.of(otherAuthorId), null);
-        adapter.save(firstBook);
-        adapter.save(secondBook);
-        adapter.save(otherBook);
-
-        var foundIds = adapter.findIdsByAuthorId(authorId);
-
-        assertEquals(Set.of(firstBook.getId(), secondBook.getId()), Set.copyOf(foundIds));
-    }
-
-    @Test
     public void findBooksByCatalog() {
         var catalogId = insertCatalog("Selected catalog");
         var otherCatalogId = insertCatalog("Other catalog");
@@ -187,22 +155,6 @@ public class BookPersistenceAdapterTest {
                 foundBooks.stream().map(Book::getId).collect(java.util.stream.Collectors.toSet()));
     }
 
-    @Test
-    public void deleteBookAndItsAuthorLinks() {
-        var authorId = insertAuthor("Linked");
-        var book = Book.create(new Isbn("9780321356680"), new Text("Book to delete"),
-                null, null, List.of(authorId), null);
-        adapter.save(book);
-
-        adapter.delete(book.getId());
-
-        assertAll(
-                () -> assertTrue(adapter.findById(book.getId()).isEmpty()),
-                () -> assertTrue(adapter.findIdsByAuthorId(authorId).isEmpty()),
-                () -> assertEquals(0, dslContext.fetchCount(BOOK_AUTHOR,
-                        BOOK_AUTHOR.BOOK_ID.eq(book.getId().value())))
-        );
-    }
 
     @Test
     public void saveManyBooks() {
@@ -230,11 +182,64 @@ public class BookPersistenceAdapterTest {
     }
 
     @Test
+    public void saveManyUpdatesExistingAndInsertsNewBook() {
+        var firstAuthorId = insertAuthor("Original bulk");
+        var secondAuthorId = insertAuthor("Updated bulk");
+        var existingBook = Book.create(new Isbn("9780321751041"), new Text("Original title"),
+                null, null, List.of(firstAuthorId), null);
+        adapter.save(existingBook);
+        var originalCreatedAt = adapter.findById(existingBook.getId()).orElseThrow().getCreatedAt();
+
+        var updatedBook = Book.restore(existingBook.getId(), existingBook.getIsbn(),
+                new Text("Updated title"), null, null, List.of(firstAuthorId, secondAuthorId), null,
+                existingBook.getCreatedAt(), existingBook.getUpdatedAt().plusSeconds(1));
+        var newBook = Book.create(new Isbn("9780596517748"), new Text("New title"),
+                null, null, List.of(), null);
+
+        adapter.saveMany(List.of(updatedBook, newBook));
+
+        var foundUpdatedBook = adapter.findById(existingBook.getId()).orElseThrow();
+        var foundNewBook = adapter.findById(newBook.getId()).orElseThrow();
+        var newAuthorOrder = dslContext.select(BOOK_AUTHOR.AUTHOR_ORDER)
+                .from(BOOK_AUTHOR)
+                .where(BOOK_AUTHOR.BOOK_ID.eq(existingBook.getId().value()))
+                .and(BOOK_AUTHOR.AUTHOR_ID.eq(secondAuthorId.value()))
+                .fetchOne(BOOK_AUTHOR.AUTHOR_ORDER);
+        assertAll(
+                () -> assertEquals(new Text("Updated title"), foundUpdatedBook.getTitle()),
+                () -> assertEquals(List.of(firstAuthorId, secondAuthorId), foundUpdatedBook.getAuthorIds()),
+                () -> assertEquals(Integer.valueOf(2), newAuthorOrder),
+                () -> assertEquals(originalCreatedAt, foundUpdatedBook.getCreatedAt()),
+                () -> assertEquals(newBook.getIsbn(), foundNewBook.getIsbn())
+        );
+    }
+
+    @Test
+    public void saveManyKeepsAuthorLinksMissingFromSuppliedBook() {
+        var authorId = insertAuthor("Existing bulk link");
+        var newAuthorId = insertAuthor("New bulk link");
+        var book = Book.create(new Isbn("9780321146533"), new Text("Original title"),
+                null, null, List.of(authorId), null);
+        adapter.save(book);
+        var updatedBook = Book.restore(book.getId(), book.getIsbn(), new Text("Updated title"),
+                null, null, List.of(newAuthorId), null,
+                book.getCreatedAt(), book.getUpdatedAt().plusSeconds(1));
+
+        adapter.saveMany(List.of(updatedBook));
+
+        var foundBook = adapter.findById(book.getId()).orElseThrow();
+        assertAll(
+                () -> assertEquals(updatedBook.getTitle(), foundBook.getTitle()),
+                () -> assertEquals(List.of(authorId, newAuthorId), foundBook.getAuthorIds())
+        );
+    }
+
+    @Test
     public void saveManyRollsBackAllBooksWhenOneFails() {
         var firstBook = Book.create(new Isbn("9780321125217"), new Text("First book"),
                 null, null, List.of(), null);
         var secondBook = Book.create(new Isbn("9780135957059"), new Text("Second book"),
-                null, null, List.of(Id.<Author>generate()), null);
+                null, null, List.of(Id.generate()), null);
 
         assertThrows(DataIntegrityViolationException.class,
                 () -> adapter.saveMany(List.of(firstBook, secondBook)));

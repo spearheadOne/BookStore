@@ -18,6 +18,7 @@ import java.time.Year;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.Tables.BOOK;
 import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.BookAuthor.BOOK_AUTHOR;
@@ -82,52 +83,72 @@ public class BookPersistenceAdapter implements BookRepository {
 
         dslContext.transaction(configuration -> {
             var tx = DSL.using(configuration);
-
-            var bookInsert = tx.insertInto(BOOK,
-                    BOOK.ID, BOOK.ISBN, BOOK.TITLE, BOOK.DESCRIPTION,
-                    BOOK.CATALOG_ID, BOOK.ISSUE_YEAR, BOOK.CREATED_AT, BOOK.UPDATED_AT);
-            for (var book : books) {
-                bookInsert.values(
-                        book.getId().value(),
-                        book.getIsbn().value(),
-                        book.getTitle().value(),
-                        book.getDescription(),
-                        book.getCatalogId() == null ? null : book.getCatalogId().value(),
-                        book.getIssueYear() == null ? null : book.getIssueYear().getValue(),
-                        OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC),
-                        OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC)
-                );
-            }
-
-            bookInsert
-                    .onConflict(BOOK.ID)
-                    .doUpdate()
-                    .set(BOOK.ISBN, DSL.excluded(BOOK.ISBN))
-                    .set(BOOK.TITLE, DSL.excluded(BOOK.TITLE))
-                    .set(BOOK.DESCRIPTION, DSL.excluded(BOOK.DESCRIPTION))
-                    .set(BOOK.ISSUE_YEAR, DSL.excluded(BOOK.ISSUE_YEAR))
-                    .set(BOOK.UPDATED_AT, DSL.excluded(BOOK.UPDATED_AT))
-                    .set(BOOK.CATALOG_ID, DSL.excluded(BOOK.CATALOG_ID))
-                    .execute();
-
-            tx.deleteFrom(BOOK_AUTHOR)
-                    .where(BOOK_AUTHOR.BOOK_ID.in(
-                            books.stream().map(book -> book.getId().value()).toList()))
-                    .execute();
-
-            var authorInsert = tx.insertInto(BOOK_AUTHOR,
-                    BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID, BOOK_AUTHOR.AUTHOR_ORDER);
-            boolean hasAuthors = false;
-            for (var book : books) {
-                for (int i = 0; i < book.getAuthorIds().size(); i++) {
-                    authorInsert.values(book.getId().value(), book.getAuthorIds().get(i).value(), i + 1);
-                    hasAuthors = true;
-                }
-            }
-            if (hasAuthors) {
-                authorInsert.execute();
-            }
+            upsertBooks(tx, books);
+            addAuthorLinks(tx, books);
         });
+    }
+
+    private void upsertBooks(DSLContext tx, List<Book> books) {
+        var insert = tx.insertInto(BOOK,
+                BOOK.ID, BOOK.ISBN, BOOK.TITLE, BOOK.DESCRIPTION,
+                BOOK.CATALOG_ID, BOOK.ISSUE_YEAR, BOOK.CREATED_AT, BOOK.UPDATED_AT);
+        for (var book : books) {
+            insert.values(
+                    book.getId().value(),
+                    book.getIsbn().value(),
+                    book.getTitle().value(),
+                    book.getDescription(),
+                    book.getCatalogId() == null ? null : book.getCatalogId().value(),
+                    book.getIssueYear() == null ? null : book.getIssueYear().getValue(),
+                    OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC),
+                    OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC)
+            );
+        }
+
+        insert.onConflict(BOOK.ID)
+                .doUpdate()
+                .set(BOOK.ISBN, DSL.excluded(BOOK.ISBN))
+                .set(BOOK.TITLE, DSL.excluded(BOOK.TITLE))
+                .set(BOOK.DESCRIPTION, DSL.excluded(BOOK.DESCRIPTION))
+                .set(BOOK.ISSUE_YEAR, DSL.excluded(BOOK.ISSUE_YEAR))
+                .set(BOOK.UPDATED_AT, DSL.excluded(BOOK.UPDATED_AT))
+                .set(BOOK.CATALOG_ID, DSL.excluded(BOOK.CATALOG_ID))
+                .execute();
+    }
+
+    private void addAuthorLinks(DSLContext tx, List<Book> books) {
+        var bookIds = books.stream().map(book -> book.getId().value()).toList();
+        var maxOrder = DSL.max(BOOK_AUTHOR.AUTHOR_ORDER).as("max_order");
+        var maxOrders = tx.select(BOOK_AUTHOR.BOOK_ID, maxOrder)
+                .from(BOOK_AUTHOR)
+                .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
+                .groupBy(BOOK_AUTHOR.BOOK_ID)
+                .fetchMap(BOOK_AUTHOR.BOOK_ID, maxOrder);
+        var linkedAuthors = tx.select(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
+                .from(BOOK_AUTHOR)
+                .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
+                .fetchGroups(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID);
+
+        var insert = tx.insertInto(BOOK_AUTHOR,
+                BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID, BOOK_AUTHOR.AUTHOR_ORDER);
+        int linkCount = 0;
+        for (var book : books) {
+            var bookId = book.getId().value();
+            var existingAuthors = Set.copyOf(linkedAuthors.getOrDefault(bookId, List.of()));
+            int order = maxOrders.getOrDefault(bookId, 0);
+            for (var authorId : book.getAuthorIds()) {
+                if (existingAuthors.contains(authorId.value())) {
+                    continue;
+                }
+                insert.values(bookId, authorId.value(), ++order);
+                linkCount++;
+            }
+        }
+        if (linkCount > 0) {
+            insert.onConflict(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
+                    .doNothing()
+                    .execute();
+        }
     }
 
     @Override
@@ -156,16 +177,6 @@ public class BookPersistenceAdapter implements BookRepository {
                 .map(record -> toBook(record.into(BOOK)));
     }
 
-    @Override
-    public List<Id<Book>> findIdsByAuthorId(Id<Author> authorId) {
-        return dslContext.select(BOOK_AUTHOR.BOOK_ID)
-                .from(BOOK_AUTHOR)
-                .where(BOOK_AUTHOR.AUTHOR_ID.eq(authorId.value()))
-                .fetch(BOOK_AUTHOR.BOOK_ID)
-                .stream()
-                .map(uuid -> new Id<Book>(uuid))
-                .toList();
-    }
 
     @Override
     public List<Book> findByCatalogId(Id<Catalog> catalogId) {

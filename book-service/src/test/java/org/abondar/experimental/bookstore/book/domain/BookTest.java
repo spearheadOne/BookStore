@@ -223,5 +223,23 @@ public class BookTest {
         );
     }
 
+    @Test
+    void addsAuthorWithoutChangingOriginalBook() {
+        Id<Author> first = Id.generate();
+        Id<Author> second = Id.generate();
+        var book = Book.create(new Isbn("0306406152"), new Text("Test"),
+                null, null, List.of(first), null);
+
+        var withSecondAuthor = book.withAuthor(second);
+
+        assertAll(
+                () -> assertEquals(List.of(first), book.getAuthorIds()),
+                () -> assertEquals(List.of(first, second), withSecondAuthor.getAuthorIds()),
+                () -> assertEquals(book.getId(), withSecondAuthor.getId()),
+                () -> assertEquals(book.getCreatedAt(), withSecondAuthor.getCreatedAt()),
+                () -> assertEquals(withSecondAuthor, withSecondAuthor.withAuthor(second))
+        );
+    }
+
 
 }

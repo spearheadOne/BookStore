@@ -9,6 +9,7 @@ import org.abondar.experimental.bookstore.common.Text;
 
 import java.time.Instant;
 import java.time.Year;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -113,6 +114,29 @@ public final class Book {
                 catalogId,
                 createdAt,
                 updatedAt
+        );
+    }
+
+    public Book withAuthor(Id<Author> authorId) {
+        Objects.requireNonNull(authorId, "Author ID must not be null");
+        if (authorIds.contains(authorId)) {
+            return this;
+        }
+
+        var updatedAuthorIds = new ArrayList<>(authorIds);
+        updatedAuthorIds.add(authorId);
+        var now = Instant.now();
+
+        return new Book(
+                id,
+                isbn,
+                title,
+                description,
+                issueYear,
+                updatedAuthorIds,
+                catalogId,
+                createdAt,
+                now.isAfter(updatedAt) ? now : updatedAt
         );
     }
 

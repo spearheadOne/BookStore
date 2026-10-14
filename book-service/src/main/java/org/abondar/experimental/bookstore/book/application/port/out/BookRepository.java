@@ -12,6 +12,9 @@ import java.util.Optional;
 public interface BookRepository {
     void save(Book book);
 
+    /**
+     * Inserts or updates books and adds missing author links as one operation.
+     */
     void saveMany(List<Book> books);
 
     Optional<Book> findById(Id<Book> id);
@@ -19,8 +22,6 @@ public interface BookRepository {
     Optional<Book> findByIsbn(Isbn isbn);
 
     List<Book> findByAuthor(Id<Author> authorId);
-
-    List<Id<Book>> findIdsByAuthorId(Id<Author> authorId);
 
     List<Book> findByCatalogId(Id<Catalog> catalogId);
 

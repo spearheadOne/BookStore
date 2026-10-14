@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,8 +60,10 @@ public class BookServiceTest {
 
         when(bookRepository.findByIsbn(book.getIsbn())).thenReturn(Optional.of(book));
 
-        bookService.registerBook(book);
+        var exception = assertThrows(IllegalArgumentException.class,
+                () -> bookService.registerBook(book));
 
+        assertTrue(exception.getMessage().contains("already exists"));
         verify(bookRepository, never()).save(book);
     }
 
@@ -136,8 +139,10 @@ public class BookServiceTest {
         );
         when(bookRepository.findById(book.getId())).thenReturn(Optional.empty());
 
-        bookService.updateBook(book);
+        var exception = assertThrows(IllegalArgumentException.class,
+                () -> bookService.updateBook(book));
 
+        assertTrue(exception.getMessage().contains("does not exist"));
         verify(bookRepository).findById(book.getId());
         verify(bookRepository, never()).save(book);
     }
