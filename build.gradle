@@ -2,6 +2,7 @@ plugins {
     id "base"
     id "org.springframework.boot" version "4.0.6" apply false
     id "io.spring.dependency-management" version "1.1.7" apply false
+    id "org.openapi.generator" version "7.26.0" apply false
 }
 
 group "org.abondar.experimental.bookstore"
@@ -16,6 +17,7 @@ configure(serviceProjects) {
     apply plugin: "idea"
     apply plugin: "org.springframework.boot"
     apply plugin: "io.spring.dependency-management"
+    apply plugin: "org.openapi.generator"
 
     group = rootProject.group
     version = rootProject.version
@@ -26,10 +28,48 @@ configure(serviceProjects) {
         }
     }
 
+    sourceSets.main.java.srcDir(layout.buildDirectory.dir("generated-src/openapi/src/main/java"))
+
     repositories {
         mavenCentral()
     }
 
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-validation")
+    }
+
+    def generatedApiPackage = "${project.group}.adapter.in.generated.${project.name.replace('-', '')}"
+    openApiGenerate {
+        generatorName.set("spring")
+        inputSpec.set(layout.projectDirectory.file("src/main/openapi/openapi.yaml"))
+        outputDir.set(layout.buildDirectory.dir("generated-src/openapi"))
+        apiPackage.set("${generatedApiPackage}.api")
+        modelPackage.set("${generatedApiPackage}.model")
+        invokerPackage.set("${generatedApiPackage}.support")
+        configOptions.set([
+                interfaceOnly        : "true",
+                skipDefaultInterface : "true",
+                useSpringBoot4       : "true",
+                useJackson3          : "true",
+                annotationLibrary    : "none",
+                documentationProvider: "none",
+                openApiNullable      : "false",
+                useBeanValidation    : "true"
+        ])
+        globalProperties.set([
+                apis           : "",
+                models         : "",
+                supportingFiles: "false",
+                apiDocs        : "false",
+                modelDocs      : "false",
+                apiTests       : "false",
+                modelTests     : "false"
+        ])
+    }
+
+    tasks.named("compileJava") {
+        dependsOn(tasks.named("openApiGenerate"))
+    }
 
     tasks.named("test") {
         useJUnitPlatform()
