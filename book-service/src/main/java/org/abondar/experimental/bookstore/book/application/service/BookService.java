@@ -2,7 +2,6 @@ package org.abondar.experimental.bookstore.book.application.service;
 
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
-import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.BookOperations;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
@@ -35,13 +34,7 @@ public class BookService implements BookOperations {
 
     @Override
     public void updateBook(Book book) {
-        var exists = bookRepository.findById(book.getId()).isPresent();
-
-        if (exists) {
-            bookRepository.save(book);
-        } else {
-            throw new BookNotFoundException(book.getId());
-        }
+        bookRepository.update(book);
     }
 
 

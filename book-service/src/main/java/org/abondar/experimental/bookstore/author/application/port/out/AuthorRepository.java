@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface AuthorRepository {
     void save(Author author);
 
+    void update(Author author);
+
     Optional<Author> findByNameAndDob(Text firstName, Text lastName, LocalDate dob);
 
     Optional<Author> findById(Id<Author> id);

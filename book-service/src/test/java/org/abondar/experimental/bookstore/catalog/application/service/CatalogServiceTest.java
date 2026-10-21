@@ -69,7 +69,7 @@ public class CatalogServiceTest {
         catalogService.updateCatalogName(catalog.getId(), "After rename");
 
         var saved = ArgumentCaptor.forClass(Catalog.class);
-        verify(catalogRepository).save(saved.capture());
+        verify(catalogRepository).update(saved.capture());
         assertAll(
                 () -> assertEquals(catalog.getId(), saved.getValue().getId()),
                 () -> assertEquals(new Text("After rename"), saved.getValue().getName()),
@@ -86,7 +86,7 @@ public class CatalogServiceTest {
 
         catalogService.updateCatalogName(catalog.getId(), catalog.getName().value());
 
-        verify(catalogRepository).save(any(Catalog.class));
+        verify(catalogRepository).update(any(Catalog.class));
     }
 
     @Test
@@ -99,7 +99,7 @@ public class CatalogServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> catalogService.updateCatalogName(catalog.getId(), other.getName().value()));
 
-        verify(catalogRepository, never()).save(any(Catalog.class));
+        verify(catalogRepository, never()).update(any(Catalog.class));
     }
 
     @Test
@@ -109,7 +109,7 @@ public class CatalogServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> catalogService.updateCatalogName(id, "New name"));
 
-        verify(catalogRepository, never()).save(any(Catalog.class));
+        verify(catalogRepository, never()).update(any(Catalog.class));
     }
 
     @Test

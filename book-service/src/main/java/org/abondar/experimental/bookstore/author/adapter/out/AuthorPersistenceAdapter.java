@@ -40,8 +40,12 @@ public class AuthorPersistenceAdapter implements AuthorRepository {
                 .set(AUTHOR.DATE_OF_DEATH, author.getDateOfDeath())
                 .set(AUTHOR.CREATED_AT, createdAt)
                 .set(AUTHOR.UPDATED_AT, updatedAt)
-                .onConflict(AUTHOR.ID)
-                .doUpdate()
+                .execute();
+    }
+
+    @Override
+    public void update(Author author) {
+        int affected = dslContext.update(AUTHOR)
                 .set(AUTHOR.SORT_NAME, author.getSortName())
                 .set(AUTHOR.FIRST_NAME, author.getFirstName().value())
                 .set(AUTHOR.LAST_NAME, author.getLastName().value())
@@ -49,8 +53,12 @@ public class AuthorPersistenceAdapter implements AuthorRepository {
                 .set(AUTHOR.COUNTRY_CODE, author.getCountryCode())
                 .set(AUTHOR.DATE_OF_BIRTH, author.getDateOfBirth())
                 .set(AUTHOR.DATE_OF_DEATH, author.getDateOfDeath())
-                .set(AUTHOR.UPDATED_AT, updatedAt)
+                .set(AUTHOR.UPDATED_AT, OffsetDateTime.ofInstant(author.getUpdatedAt(), ZoneOffset.UTC))
+                .where(AUTHOR.ID.eq(author.getId().value()))
                 .execute();
+        if (affected == 0) {
+            throw new IllegalArgumentException("Author doesn't exist");
+        }
     }
 
     @Override

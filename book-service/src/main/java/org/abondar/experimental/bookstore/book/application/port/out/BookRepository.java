@@ -12,9 +12,8 @@ import java.util.Optional;
 public interface BookRepository {
     void save(Book book);
 
-    /**
-     * Inserts or updates books and adds missing author links as one operation.
-     */
+    void update(Book book);
+
     void saveMany(List<Book> books);
 
     Optional<Book> findById(Id<Book> id);

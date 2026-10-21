@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -106,21 +107,21 @@ public class AuthorServiceTest {
     @Test
     public void updateExistingAuthor() {
         var author = author();
-        when(authorRepository.findById(author.getId())).thenReturn(Optional.of(author));
 
         authorService.updateAuthor(author);
 
-        verify(authorRepository).save(author);
+        verify(authorRepository).update(author);
     }
 
     @Test
     public void updateMissingAuthor() {
         var author = author();
-        when(authorRepository.findById(author.getId())).thenReturn(Optional.empty());
+        doThrow(new IllegalArgumentException("Author doesn't exist"))
+                .when(authorRepository).update(author);
 
         assertThrows(IllegalArgumentException.class, () -> authorService.updateAuthor(author));
 
-        verify(authorRepository, never()).save(author);
+        verify(authorRepository).update(author);
     }
 
     @Test

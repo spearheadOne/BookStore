@@ -31,13 +31,21 @@ public class CatalogPersistenceAdapter implements CatalogRepository {
                 .set(CATALOG.NAME, catalog.getName().value())
                 .set(CATALOG.CREATED_AT, createdAt)
                 .set(CATALOG.UPDATED_AT, updatedAt)
-                .onConflict(CATALOG.ID)
-                .doUpdate()
-                .set(CATALOG.NAME, catalog.getName().value())
-                .set(CATALOG.UPDATED_AT, updatedAt)
                 .execute();
 
 
+    }
+
+    @Override
+    public void update(Catalog catalog) {
+        int affected = dslContext.update(CATALOG)
+                .set(CATALOG.NAME, catalog.getName().value())
+                .set(CATALOG.UPDATED_AT, OffsetDateTime.ofInstant(catalog.getUpdatedAt(), ZoneOffset.UTC))
+                .where(CATALOG.ID.eq(catalog.getId().value()))
+                .execute();
+        if (affected == 0) {
+            throw new IllegalArgumentException("Catalog not found");
+        }
     }
 
     @Override

@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AuthorPersistenceAdapterTest extends BaseAdapterTest {
@@ -97,7 +98,7 @@ public class AuthorPersistenceAdapterTest extends BaseAdapterTest {
         var updatedAuthor = Author.restore(author.getId(), new Text("New"), new Text("Name"),
                 "Name, New", LocalDate.of(1900, 1, 1), null, null, null,
                 author.getCreatedAt(), author.getUpdatedAt().plusSeconds(1));
-        adapter.save(updatedAuthor);
+        adapter.update(updatedAuthor);
         var foundAuthor = adapter.findById(author.getId());
 
         assertTrue(foundAuthor.isPresent());
@@ -110,6 +111,15 @@ public class AuthorPersistenceAdapterTest extends BaseAdapterTest {
                 () -> assertNull(foundAuthor.get().getBiography()),
                 () -> assertTrue(foundAuthor.get().getUpdatedAt().isAfter(author.getUpdatedAt()))
         );
+    }
+
+    @Test
+    public void updateMissingAuthorDoesNotInsertIt() {
+        var author = Author.create(new Text("Absent"), new Text("Writer"), null,
+                null, null, null, null);
+
+        assertThrows(IllegalArgumentException.class, () -> adapter.update(author));
+        assertTrue(adapter.findById(author.getId()).isEmpty());
     }
 
     @Test

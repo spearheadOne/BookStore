@@ -9,6 +9,8 @@ public interface CatalogRepository {
 
     void save(Catalog catalog);
 
+    void update(Catalog catalog);
+
     Optional<Catalog> findById(Id<Catalog> catalogId);
 
     Optional<Catalog> findByName(String name);

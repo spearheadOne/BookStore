@@ -54,7 +54,7 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
         var updated = Catalog.restore(catalog.getId(), new Text("After rename"),
                 catalog.getCreatedAt(), catalog.getUpdatedAt().plusSeconds(1));
 
-        adapter.save(updated);
+        adapter.update(updated);
 
         var found = adapter.findById(catalog.getId()).orElseThrow();
         assertAll(
@@ -63,6 +63,14 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
                 () -> assertTrue(found.getUpdatedAt().isAfter(originalCreatedAt)),
                 () -> assertTrue(adapter.findByName("Before rename").isEmpty())
         );
+    }
+
+    @Test
+    public void updateMissingCatalogDoesNotInsertIt() {
+        var catalog = Catalog.create(new Text("Absent catalog"));
+
+        assertThrows(IllegalArgumentException.class, () -> adapter.update(catalog));
+        assertTrue(adapter.findById(catalog.getId()).isEmpty());
     }
 
     @Test

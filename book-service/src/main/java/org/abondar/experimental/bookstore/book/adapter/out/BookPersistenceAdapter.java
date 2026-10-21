@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.records.BookRecord;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -54,30 +55,55 @@ public class BookPersistenceAdapter implements BookRepository {
                         .set(BOOK.ISSUE_YEAR, issueYear)
                         .set(BOOK.CREATED_AT, createdAt)
                         .set(BOOK.UPDATED_AT, updatedAt)
-                        .onConflict(BOOK.ID)
-                        .doUpdate()
-                        .set(BOOK.ISBN, book.getIsbn().value())
-                        .set(BOOK.TITLE, book.getTitle().value())
-                        .set(BOOK.DESCRIPTION, book.getDescription())
-                        .set(BOOK.ISSUE_YEAR, issueYear)
-                        .set(BOOK.UPDATED_AT, updatedAt)
-                        .set(BOOK.CATALOG_ID, catalogId)
                         .execute();
 
-                tx.deleteFrom(BOOK_AUTHOR)
-                        .where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value()))
-                        .execute();
-
-                for (int i = 0; i < book.getAuthorIds().size(); i++) {
-                    tx.insertInto(BOOK_AUTHOR)
-                            .set(BOOK_AUTHOR.BOOK_ID, book.getId().value())
-                            .set(BOOK_AUTHOR.AUTHOR_ID, book.getAuthorIds().get(i).value())
-                            .set(BOOK_AUTHOR.AUTHOR_ORDER, i + 1)
-                            .execute();
-                }
+                replaceAuthorLinks(tx, book);
             });
         } catch (DuplicateKeyException exception) {
             throw new BookAlreadyExistsException(book.getIsbn(), exception);
+        }
+    }
+
+    @Override
+    public void update(Book book) {
+        try {
+            boolean updated = dslContext.transactionResult(configuration -> {
+                var tx = DSL.using(configuration);
+                int affected = tx.update(BOOK)
+                        .set(BOOK.ISBN, book.getIsbn().value())
+                        .set(BOOK.TITLE, book.getTitle().value())
+                        .set(BOOK.DESCRIPTION, book.getDescription())
+                        .set(BOOK.ISSUE_YEAR, book.getIssueYear() == null ? null : book.getIssueYear().getValue())
+                        .set(BOOK.CATALOG_ID, book.getCatalogId() == null ? null : book.getCatalogId().value())
+                        .set(BOOK.UPDATED_AT, OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC))
+                        .where(BOOK.ID.eq(book.getId().value()))
+                        .execute();
+                if (affected == 0) {
+                    return false;
+                }
+
+                replaceAuthorLinks(tx, book);
+                return true;
+            });
+            if (!updated) {
+                throw new BookNotFoundException(book.getId());
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BookAlreadyExistsException(book.getIsbn(), exception);
+        }
+    }
+
+    private void replaceAuthorLinks(DSLContext tx, Book book) {
+        tx.deleteFrom(BOOK_AUTHOR)
+                .where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value()))
+                .execute();
+
+        for (int i = 0; i < book.getAuthorIds().size(); i++) {
+            tx.insertInto(BOOK_AUTHOR)
+                    .set(BOOK_AUTHOR.BOOK_ID, book.getId().value())
+                    .set(BOOK_AUTHOR.AUTHOR_ID, book.getAuthorIds().get(i).value())
+                    .set(BOOK_AUTHOR.AUTHOR_ORDER, i + 1)
+                    .execute();
         }
     }
 

@@ -4,6 +4,7 @@ import org.abondar.experimental.bookstore.BaseAdapterTest;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.adapter.out.BookPersistenceAdapter;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
@@ -109,7 +110,7 @@ public class BookPersistenceAdapterTest extends BaseAdapterTest {
         var updatedBook = Book.restore(book.getId(), book.getIsbn(), new Text("Updated title"),
                 "Updated description", Year.of(1995), List.of(secondAuthorId), catalogId,
                 book.getCreatedAt(), book.getUpdatedAt().plusSeconds(1));
-        adapter.save(updatedBook);
+        adapter.update(updatedBook);
         var foundBook = adapter.findById(book.getId());
 
         assertTrue(foundBook.isPresent());
@@ -122,6 +123,32 @@ public class BookPersistenceAdapterTest extends BaseAdapterTest {
                 () -> assertEquals(1, dslContext.fetchCount(BOOK_AUTHOR,
                         BOOK_AUTHOR.BOOK_ID.eq(book.getId().value())))
         );
+    }
+
+    @Test
+    public void updateMissingBookDoesNotInsertIt() {
+        var book = Book.create(new Isbn("9781234567880"), new Text("Missing book"),
+                null, null, List.of(), null);
+
+        assertThrows(BookNotFoundException.class, () -> adapter.update(book));
+        assertTrue(adapter.findById(book.getId()).isEmpty());
+    }
+
+    @Test
+    public void updateRejectsDuplicateIsbnWithoutChangingBook() {
+        var first = Book.create(new Isbn("9781234567866"), new Text("First book"),
+                null, null, List.of(), null);
+        var second = Book.create(new Isbn("9781234567859"), new Text("Second book"),
+                null, null, List.of(), null);
+        adapter.save(first);
+        adapter.save(second);
+
+        var duplicate = Book.restore(second.getId(), first.getIsbn(), new Text("Changed title"),
+                null, null, List.of(), null, second.getCreatedAt(), second.getUpdatedAt());
+
+        assertThrows(BookAlreadyExistsException.class, () -> adapter.update(duplicate));
+        assertEquals(second.getIsbn(), adapter.findById(second.getId()).orElseThrow().getIsbn());
+        assertEquals(second.getTitle(), adapter.findById(second.getId()).orElseThrow().getTitle());
     }
 
     @Test

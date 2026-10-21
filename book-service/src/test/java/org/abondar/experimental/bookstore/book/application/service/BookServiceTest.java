@@ -19,6 +19,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -121,12 +122,9 @@ public class BookServiceTest {
                 existingBook.getCreatedAt(),
                 existingBook.getUpdatedAt().plusSeconds(1)
         );
-        when(bookRepository.findById(updatedBook.getId())).thenReturn(Optional.of(existingBook));
-
         bookService.updateBook(updatedBook);
 
-        verify(bookRepository).findById(updatedBook.getId());
-        verify(bookRepository).save(updatedBook);
+        verify(bookRepository).update(updatedBook);
     }
 
     @Test
@@ -139,14 +137,13 @@ public class BookServiceTest {
                 List.of(),
                 null
         );
-        when(bookRepository.findById(book.getId())).thenReturn(Optional.empty());
+        doThrow(new BookNotFoundException(book.getId())).when(bookRepository).update(book);
 
         var exception = assertThrows(BookNotFoundException.class,
                 () -> bookService.updateBook(book));
 
         assertTrue(exception.getMessage().contains("does not exist"));
-        verify(bookRepository).findById(book.getId());
-        verify(bookRepository, never()).save(book);
+        verify(bookRepository).update(book);
     }
 
     @Test

@@ -44,7 +44,7 @@ public class CatalogService implements CatalogOperations {
             throw new IllegalArgumentException("Name already exists");
         }
 
-        catalogRepository.save(
+        catalogRepository.update(
                 Catalog.restore(
                         catalogId,
                         updatedName,

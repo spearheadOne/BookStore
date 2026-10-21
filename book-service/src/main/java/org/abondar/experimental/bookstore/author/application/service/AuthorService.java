@@ -48,11 +48,7 @@ public class AuthorService implements AuthorOperations {
 
     @Override
     public void updateAuthor(Author author) {
-        if (authorRepository.findById(author.getId()).isPresent()) {
-            authorRepository.save(author);
-        } else {
-            throw new IllegalArgumentException("Author doesn't exist");
-        }
+        authorRepository.update(author);
     }
 
     @Override
