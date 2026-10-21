@@ -1,0 +1,286 @@
+package org.abondar.experimental.bookstore.book.adapter.in;
+
+import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.BookResponse;
+import org.abondar.experimental.bookstore.author.domain.Author;
+import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.port.in.BookOperations;
+import org.abondar.experimental.bookstore.book.domain.Book;
+import org.abondar.experimental.bookstore.book.domain.Isbn;
+import org.abondar.experimental.bookstore.catalog.domain.Catalog;
+import org.abondar.experimental.bookstore.common.Id;
+import org.abondar.experimental.bookstore.common.Text;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.client.RestTestClient;
+
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.Year;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class BookApiAdapterTest {
+
+    @Mock
+    private BookOperations bookOps;
+
+    private RestTestClient client;
+
+    @BeforeEach
+    void setUp() {
+        client = RestTestClient.bindToController(new BookApiAdapter(bookOps))
+                .configureServer(server -> server.setControllerAdvice(new BookApiExceptionHandler()))
+                .build();
+    }
+
+    @Test
+    void registerBook() {
+        BookResponse result = client.post()
+                .uri("/api/v1/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {
+                          "isbn": "0306406152",
+                          "title": "  The Book  ",
+                          "description": "A description",
+                          "issueYear": 1980
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(BookResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        var captor = ArgumentCaptor.forClass(Book.class);
+        verify(bookOps).registerBook(captor.capture());
+        var book = captor.getValue();
+
+        assertEquals(new Isbn("0306406152"), book.getIsbn());
+        assertEquals(new Text("The Book"), book.getTitle());
+        assertEquals(Year.of(1980), book.getIssueYear());
+        assertTrue(book.getAuthorIds().isEmpty());
+        assertNull(book.getCatalogId());
+        assertEquals(book.getCreatedAt(), book.getUpdatedAt());
+
+        assertNotNull(result);
+        assertEquals(book.getId().value(), result.getId());
+        assertEquals("The Book", result.getTitle());
+        assertEquals("A description", result.getDescription());
+        assertEquals(Integer.valueOf(1980), result.getIssueYear());
+        assertTrue(result.getAuthorIds().isEmpty());
+        assertNull(result.getCatalogId());
+        assertEquals(OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC), result.getCreatedAt());
+        assertEquals(OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC), result.getUpdatedAt());
+    }
+
+    @Test
+    void getBook() {
+        var book = existingBook();
+        when(bookOps.getBook(book.getId())).thenReturn(Optional.of(book));
+
+        BookResponse result = client.get()
+                .uri("/api/v1/books/{id}", book.getId().value())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(BookResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertNotNull(result);
+        assertEquals(book.getId().value(), result.getId());
+        assertEquals(book.getIsbn().value(), result.getIsbn());
+        assertEquals(book.getTitle().value(), result.getTitle());
+        assertEquals(book.getAuthorIds().stream().map(Id::value).toList(), List.copyOf(result.getAuthorIds()));
+        assertEquals(book.getCatalogId().value(), result.getCatalogId());
+        assertEquals(OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC), result.getCreatedAt());
+        assertEquals(OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC), result.getUpdatedAt());
+        verify(bookOps).getBook(book.getId());
+    }
+
+    @Test
+    void registerBookWithInvalidIsbn() {
+        client.post()
+                .uri("/api/v1/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"isbn":"123","title":"Invalid ISBN"}
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        verify(bookOps, never()).registerBook(any(Book.class));
+    }
+
+    @Test
+    void registerBookWithExistingIsbn() {
+        doThrow(new BookAlreadyExistsException(new Isbn("0306406152")))
+                .when(bookOps).registerBook(any(Book.class));
+
+        client.post()
+                .uri("/api/v1/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"isbn":"0306406152","title":"Duplicate"}
+                        """)
+                .exchange()
+                .expectStatus().isEqualTo(409);
+    }
+
+    @Test
+    void getMissingBook() {
+        var id = UUID.randomUUID();
+        when(bookOps.getBook(new Id<Book>(id))).thenReturn(Optional.empty());
+
+        client.get()
+                .uri("/api/v1/books/{id}", id)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody().isEmpty();
+    }
+
+    @Test
+    void updateBook() {
+        var existing = existingBook();
+        var newAuthorId = UUID.randomUUID();
+        var newCatalogId = UUID.randomUUID();
+        when(bookOps.getBook(existing.getId())).thenReturn(Optional.of(existing));
+
+        BookResponse result = client.put()
+                .uri("/api/v1/books/{id}", existing.getId().value())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {
+                          "isbn": "9780306406157",
+                          "title": "Updated Book",
+                          "description": "Updated description",
+                          "issueYear": 1981,
+                          "authorIds": ["%s"],
+                          "catalogId": "%s"
+                        }
+                        """.formatted(newAuthorId, newCatalogId))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(BookResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        var captor = ArgumentCaptor.forClass(Book.class);
+        verify(bookOps).updateBook(captor.capture());
+        var updated = captor.getValue();
+
+        assertEquals(existing.getId(), updated.getId());
+        assertEquals(new Isbn("9780306406157"), updated.getIsbn());
+        assertEquals(new Text("Updated Book"), updated.getTitle());
+        assertEquals(Year.of(1981), updated.getIssueYear());
+        assertEquals(List.of(new Id<Author>(newAuthorId)), updated.getAuthorIds());
+        assertEquals(new Id<Catalog>(newCatalogId), updated.getCatalogId());
+        assertEquals(existing.getCreatedAt(), updated.getCreatedAt());
+        assertFalse(updated.getUpdatedAt().isBefore(existing.getUpdatedAt()));
+
+        assertNotNull(result);
+        assertEquals(newAuthorId, result.getAuthorIds().iterator().next());
+        assertEquals(newCatalogId, result.getCatalogId());
+        assertEquals(OffsetDateTime.ofInstant(updated.getCreatedAt(), ZoneOffset.UTC), result.getCreatedAt());
+        assertEquals(OffsetDateTime.ofInstant(updated.getUpdatedAt(), ZoneOffset.UTC), result.getUpdatedAt());
+    }
+
+    @Test
+    void updateMissingBook() {
+        var id = UUID.randomUUID();
+        when(bookOps.getBook(new Id<>(id))).thenReturn(Optional.empty());
+
+        client.put()
+                .uri("/api/v1/books/{id}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"isbn":"0306406152","title":"Missing Book","authorIds":[]}
+                        """)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody().isEmpty();
+
+        verify(bookOps, never()).updateBook(any(Book.class));
+    }
+
+    @Test
+    void updateBookDeletedAfterLookup() {
+        var existing = existingBook();
+        when(bookOps.getBook(existing.getId())).thenReturn(Optional.of(existing));
+        doThrow(new BookNotFoundException(existing.getId()))
+                .when(bookOps).updateBook(any(Book.class));
+
+        client.put()
+                .uri("/api/v1/books/{id}", existing.getId().value())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"isbn":"0306406152","title":"Updated","authorIds":[]}
+                        """)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void updateBookWithExistingIsbn() {
+        var existing = existingBook();
+        when(bookOps.getBook(existing.getId())).thenReturn(Optional.of(existing));
+        doThrow(new BookAlreadyExistsException(new Isbn("9780306406157")))
+                .when(bookOps).updateBook(any(Book.class));
+
+        client.put()
+                .uri("/api/v1/books/{id}", existing.getId().value())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"isbn":"9780306406157","title":"Updated","authorIds":[]}
+                        """)
+                .exchange()
+                .expectStatus().isEqualTo(409);
+    }
+
+    @Test
+    void deleteBook() {
+        var id = UUID.randomUUID();
+
+        client.delete()
+                .uri("/api/v1/books/{id}", id)
+                .exchange()
+                .expectStatus().isNoContent()
+                .expectBody().isEmpty();
+
+        verify(bookOps).deleteBook(new Id<>(id));
+    }
+
+    private Book existingBook() {
+        return Book.restore(
+                new Id<>(UUID.randomUUID()),
+                new Isbn("0306406152"),
+                new Text("The Book"),
+                "A description",
+                Year.of(1980),
+                List.of(new Id<>(UUID.randomUUID())),
+                new Id<>(UUID.randomUUID()),
+                Instant.parse("2024-01-02T03:04:05Z"),
+                Instant.parse("2024-06-07T08:09:10Z")
+        );
+    }
+}

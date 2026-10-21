@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.book.application.adapter.out;
 import org.abondar.experimental.bookstore.BaseAdapterTest;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.adapter.out.BookPersistenceAdapter;
+import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
@@ -73,6 +74,19 @@ public class BookPersistenceAdapterTest extends BaseAdapterTest {
                 () -> assertEquals(book.getIsbn(), foundBook.get().getIsbn()),
                 () -> assertEquals(book.getTitle(), foundBook.get().getTitle())
         );
+    }
+
+    @Test
+    public void saveRejectsDuplicateIsbn() {
+        var first = Book.create(new Isbn("9781234567897"), new Text("First copy"),
+                null, null, List.of(), null);
+        var second = Book.create(first.getIsbn(), new Text("Second copy"),
+                null, null, List.of(), null);
+
+        adapter.save(first);
+
+        assertThrows(BookAlreadyExistsException.class, () -> adapter.save(second));
+        assertTrue(adapter.findById(second.getId()).isEmpty());
     }
 
     @Test

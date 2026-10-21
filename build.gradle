@@ -54,7 +54,8 @@ configure(serviceProjects) {
                 annotationLibrary    : "none",
                 documentationProvider: "none",
                 openApiNullable      : "false",
-                useBeanValidation    : "true"
+                useBeanValidation: "true",
+                useTags          : "true"
         ])
         globalProperties.set([
                 apis           : "",

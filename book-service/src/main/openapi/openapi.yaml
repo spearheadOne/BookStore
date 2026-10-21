@@ -2,4 +2,149 @@ openapi: 3.0.3
 info:
   title: Bookstore API
   version: 1.0.0
-paths: { }
+paths:
+  /api/v1/books:
+    post:
+      tags: [ Book ]
+      operationId: registerBook
+      summary: Register a book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterBookRequest'
+      responses:
+        '201':
+          description: Book registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '400':
+          description: Invalid book data
+        '409':
+          description: ISBN already exists
+
+  /api/v1/books/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [ Book ]
+      operationId: getBook
+      summary: Get a book by ID
+      responses:
+        '200':
+          description: Book found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '404':
+          description: Book not found
+    put:
+      tags: [ Book ]
+      operationId: updateBook
+      summary: Replace a book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBookRequest'
+      responses:
+        '200':
+          description: Book updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+        '400':
+          description: Invalid book data
+        '404':
+          description: Book not found
+        '409':
+          description: ISBN already exists
+    delete:
+      tags: [ Book ]
+      operationId: deleteBook
+      summary: Delete a book by ID
+      responses:
+        '204':
+          description: Book deleted
+
+components:
+  schemas:
+    RegisterBookRequest:
+      type: object
+      required: [ isbn, title ]
+      properties:
+        isbn:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        issueYear:
+          type: integer
+          format: int32
+
+    UpdateBookRequest:
+      type: object
+      required: [ isbn, title, authorIds ]
+      properties:
+        isbn:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        issueYear:
+          type: integer
+          format: int32
+        authorIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        catalogId:
+          type: string
+          format: uuid
+
+    BookResponse:
+      type: object
+      required: [ id, isbn, title, authorIds, createdAt, updatedAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        isbn:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        issueYear:
+          type: integer
+          format: int32
+        authorIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        catalogId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

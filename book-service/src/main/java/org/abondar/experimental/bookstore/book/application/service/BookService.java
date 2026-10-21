@@ -1,6 +1,8 @@
 package org.abondar.experimental.bookstore.book.application.service;
 
 import lombok.RequiredArgsConstructor;
+import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.BookOperations;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
@@ -22,7 +24,7 @@ public class BookService implements BookOperations {
         if (!exists) {
             bookRepository.save(book);
         } else {
-            throw new IllegalArgumentException("Book already exists");
+            throw new BookAlreadyExistsException(book.getIsbn());
         }
     }
 
@@ -38,7 +40,7 @@ public class BookService implements BookOperations {
         if (exists) {
             bookRepository.save(book);
         } else {
-            throw new IllegalArgumentException("Book does not exist");
+            throw new BookNotFoundException(book.getId());
         }
     }
 

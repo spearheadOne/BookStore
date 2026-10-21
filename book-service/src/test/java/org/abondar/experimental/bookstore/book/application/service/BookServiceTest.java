@@ -1,5 +1,7 @@
 package org.abondar.experimental.bookstore.book.application.service;
 
+import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -60,7 +62,7 @@ public class BookServiceTest {
 
         when(bookRepository.findByIsbn(book.getIsbn())).thenReturn(Optional.of(book));
 
-        var exception = assertThrows(IllegalArgumentException.class,
+        var exception = assertThrows(BookAlreadyExistsException.class,
                 () -> bookService.registerBook(book));
 
         assertTrue(exception.getMessage().contains("already exists"));
@@ -139,7 +141,7 @@ public class BookServiceTest {
         );
         when(bookRepository.findById(book.getId())).thenReturn(Optional.empty());
 
-        var exception = assertThrows(IllegalArgumentException.class,
+        var exception = assertThrows(BookNotFoundException.class,
                 () -> bookService.updateBook(book));
 
         assertTrue(exception.getMessage().contains("does not exist"));

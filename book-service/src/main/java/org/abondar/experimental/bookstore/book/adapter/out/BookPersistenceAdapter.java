@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.book.adapter.out;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.records.BookRecord;
 import org.abondar.experimental.bookstore.author.domain.Author;
+import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -11,6 +12,7 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
@@ -39,40 +41,44 @@ public class BookPersistenceAdapter implements BookRepository {
         var createdAt = OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC);
         var updatedAt = OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC);
 
-        dslContext.transaction(configuration -> {
-            var tx = DSL.using(configuration);
+        try {
+            dslContext.transaction(configuration -> {
+                var tx = DSL.using(configuration);
 
-            tx.insertInto(BOOK)
-                    .set(BOOK.ID, book.getId().value())
-                    .set(BOOK.TITLE, book.getTitle().value())
-                    .set(BOOK.ISBN, book.getIsbn().value())
-                    .set(BOOK.DESCRIPTION, book.getDescription())
-                    .set(BOOK.CATALOG_ID, catalogId)
-                    .set(BOOK.ISSUE_YEAR, issueYear)
-                    .set(BOOK.CREATED_AT, createdAt)
-                    .set(BOOK.UPDATED_AT, updatedAt)
-                    .onConflict(BOOK.ID)
-                    .doUpdate()
-                    .set(BOOK.ISBN, book.getIsbn().value())
-                    .set(BOOK.TITLE, book.getTitle().value())
-                    .set(BOOK.DESCRIPTION, book.getDescription())
-                    .set(BOOK.ISSUE_YEAR, issueYear)
-                    .set(BOOK.UPDATED_AT, updatedAt)
-                    .set(BOOK.CATALOG_ID, catalogId)
-                    .execute();
-
-            tx.deleteFrom(BOOK_AUTHOR)
-                    .where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value()))
-                    .execute();
-
-            for (int i = 0; i < book.getAuthorIds().size(); i++) {
-                tx.insertInto(BOOK_AUTHOR)
-                        .set(BOOK_AUTHOR.BOOK_ID, book.getId().value())
-                        .set(BOOK_AUTHOR.AUTHOR_ID, book.getAuthorIds().get(i).value())
-                        .set(BOOK_AUTHOR.AUTHOR_ORDER, i + 1)
+                tx.insertInto(BOOK)
+                        .set(BOOK.ID, book.getId().value())
+                        .set(BOOK.TITLE, book.getTitle().value())
+                        .set(BOOK.ISBN, book.getIsbn().value())
+                        .set(BOOK.DESCRIPTION, book.getDescription())
+                        .set(BOOK.CATALOG_ID, catalogId)
+                        .set(BOOK.ISSUE_YEAR, issueYear)
+                        .set(BOOK.CREATED_AT, createdAt)
+                        .set(BOOK.UPDATED_AT, updatedAt)
+                        .onConflict(BOOK.ID)
+                        .doUpdate()
+                        .set(BOOK.ISBN, book.getIsbn().value())
+                        .set(BOOK.TITLE, book.getTitle().value())
+                        .set(BOOK.DESCRIPTION, book.getDescription())
+                        .set(BOOK.ISSUE_YEAR, issueYear)
+                        .set(BOOK.UPDATED_AT, updatedAt)
+                        .set(BOOK.CATALOG_ID, catalogId)
                         .execute();
-            }
-        });
+
+                tx.deleteFrom(BOOK_AUTHOR)
+                        .where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value()))
+                        .execute();
+
+                for (int i = 0; i < book.getAuthorIds().size(); i++) {
+                    tx.insertInto(BOOK_AUTHOR)
+                            .set(BOOK_AUTHOR.BOOK_ID, book.getId().value())
+                            .set(BOOK_AUTHOR.AUTHOR_ID, book.getAuthorIds().get(i).value())
+                            .set(BOOK_AUTHOR.AUTHOR_ORDER, i + 1)
+                            .execute();
+                }
+            });
+        } catch (DuplicateKeyException exception) {
+            throw new BookAlreadyExistsException(book.getIsbn(), exception);
+        }
     }
 
     @Override
