@@ -1,5 +1,14 @@
 package org.abondar.experimental.bookstore.book.adapter.out;
 
+import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.Tables.BOOK;
+import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.BookAuthor.BOOK_AUTHOR;
+
+import java.time.OffsetDateTime;
+import java.time.Year;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.records.BookRecord;
 import org.abondar.experimental.bookstore.author.domain.Author;
@@ -16,253 +25,243 @@ import org.jooq.impl.DSL;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
-import java.time.OffsetDateTime;
-import java.time.Year;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-
-import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.Tables.BOOK;
-import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.BookAuthor.BOOK_AUTHOR;
-
 @Repository
 @RequiredArgsConstructor
 public class BookPersistenceAdapter implements BookRepository {
 
-    private final DSLContext dslContext;
+  private final DSLContext dslContext;
 
-    @Override
-    public void save(Book book) {
-        var catalogId = book.getCatalogId() == null ? null : book.getCatalogId().value();
-        var issueYear = book.getIssueYear() == null ? null : book.getIssueYear().getValue();
-        var createdAt = OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC);
-        var updatedAt = OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC);
+  @Override
+  public void save(Book book) {
+    var catalogId = book.getCatalogId() == null ? null : book.getCatalogId().value();
+    var issueYear = book.getIssueYear() == null ? null : book.getIssueYear().getValue();
+    var createdAt = OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC);
+    var updatedAt = OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC);
 
-        try {
-            dslContext.transaction(
-                    configuration -> {
-                        var tx = DSL.using(configuration);
+    try {
+      dslContext.transaction(
+          configuration -> {
+            var tx = DSL.using(configuration);
 
-                        tx.insertInto(BOOK)
-                                .set(BOOK.ID, book.getId().value())
-                                .set(BOOK.TITLE, book.getTitle().value())
-                                .set(BOOK.ISBN, book.getIsbn().value())
-                                .set(BOOK.DESCRIPTION, book.getDescription())
-                                .set(BOOK.CATALOG_ID, catalogId)
-                                .set(BOOK.ISSUE_YEAR, issueYear)
-                                .set(BOOK.CREATED_AT, createdAt)
-                                .set(BOOK.UPDATED_AT, updatedAt)
-                                .execute();
+            tx.insertInto(BOOK)
+                .set(BOOK.ID, book.getId().value())
+                .set(BOOK.TITLE, book.getTitle().value())
+                .set(BOOK.ISBN, book.getIsbn().value())
+                .set(BOOK.DESCRIPTION, book.getDescription())
+                .set(BOOK.CATALOG_ID, catalogId)
+                .set(BOOK.ISSUE_YEAR, issueYear)
+                .set(BOOK.CREATED_AT, createdAt)
+                .set(BOOK.UPDATED_AT, updatedAt)
+                .execute();
 
-                        replaceAuthorLinks(tx, book);
-                    });
-        } catch (DuplicateKeyException exception) {
-            throw new BookAlreadyExistsException(book.getIsbn(), exception);
-        }
+            replaceAuthorLinks(tx, book);
+          });
+    } catch (DuplicateKeyException exception) {
+      throw new BookAlreadyExistsException(book.getIsbn(), exception);
     }
+  }
 
-    @Override
-    public void update(Book book) {
-        try {
-            boolean updated =
-                    dslContext.transactionResult(
-                            configuration -> {
+  @Override
+  public void update(Book book) {
+    try {
+      boolean updated =
+          dslContext.transactionResult(
+              configuration -> {
                 var tx = DSL.using(configuration);
-                                int affected =
-                                        tx.update(BOOK)
+                int affected =
+                    tx.update(BOOK)
                         .set(BOOK.ISBN, book.getIsbn().value())
                         .set(BOOK.TITLE, book.getTitle().value())
                         .set(BOOK.DESCRIPTION, book.getDescription())
-                                                .set(
-                                                        BOOK.ISSUE_YEAR,
-                                                        book.getIssueYear() == null ? null : book.getIssueYear().getValue())
-                                                .set(
-                                                        BOOK.CATALOG_ID,
-                                                        book.getCatalogId() == null ? null : book.getCatalogId().value())
-                                                .set(
-                                                        BOOK.UPDATED_AT,
-                                                        OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC))
+                        .set(
+                            BOOK.ISSUE_YEAR,
+                            book.getIssueYear() == null ? null : book.getIssueYear().getValue())
+                        .set(
+                            BOOK.CATALOG_ID,
+                            book.getCatalogId() == null ? null : book.getCatalogId().value())
+                        .set(
+                            BOOK.UPDATED_AT,
+                            OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC))
                         .where(BOOK.ID.eq(book.getId().value()))
                         .execute();
                 if (affected == 0) {
-                    return false;
+                  return false;
                 }
 
                 replaceAuthorLinks(tx, book);
                 return true;
-                            });
-            if (!updated) {
-                throw new BookNotFoundException(book.getId());
-            }
-        } catch (DuplicateKeyException exception) {
-            throw new BookAlreadyExistsException(book.getIsbn(), exception);
-        }
+              });
+      if (!updated) {
+        throw new BookNotFoundException(book.getId());
+      }
+    } catch (DuplicateKeyException exception) {
+      throw new BookAlreadyExistsException(book.getIsbn(), exception);
+    }
+  }
+
+  private void replaceAuthorLinks(DSLContext tx, Book book) {
+    tx.deleteFrom(BOOK_AUTHOR).where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value())).execute();
+
+    for (int i = 0; i < book.getAuthorIds().size(); i++) {
+      tx.insertInto(BOOK_AUTHOR)
+          .set(BOOK_AUTHOR.BOOK_ID, book.getId().value())
+          .set(BOOK_AUTHOR.AUTHOR_ID, book.getAuthorIds().get(i).value())
+          .set(BOOK_AUTHOR.AUTHOR_ORDER, i + 1)
+          .execute();
+    }
+  }
+
+  @Override
+  public void saveMany(List<Book> books) {
+    if (books.isEmpty()) {
+      return;
     }
 
-    private void replaceAuthorLinks(DSLContext tx, Book book) {
-        tx.deleteFrom(BOOK_AUTHOR).where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value())).execute();
-
-        for (int i = 0; i < book.getAuthorIds().size(); i++) {
-            tx.insertInto(BOOK_AUTHOR)
-                    .set(BOOK_AUTHOR.BOOK_ID, book.getId().value())
-                    .set(BOOK_AUTHOR.AUTHOR_ID, book.getAuthorIds().get(i).value())
-                    .set(BOOK_AUTHOR.AUTHOR_ORDER, i + 1)
-                    .execute();
-        }
-    }
-
-    @Override
-    public void saveMany(List<Book> books) {
-        if (books.isEmpty()) {
-            return;
-        }
-
-        dslContext.transaction(
-                configuration -> {
-                    var tx = DSL.using(configuration);
-                    upsertBooks(tx, books);
-                    addAuthorLinks(tx, books);
+    dslContext.transaction(
+        configuration -> {
+          var tx = DSL.using(configuration);
+          upsertBooks(tx, books);
+          addAuthorLinks(tx, books);
         });
+  }
+
+  private void upsertBooks(DSLContext tx, List<Book> books) {
+    var insert =
+        tx.insertInto(
+            BOOK,
+            BOOK.ID,
+            BOOK.ISBN,
+            BOOK.TITLE,
+            BOOK.DESCRIPTION,
+            BOOK.CATALOG_ID,
+            BOOK.ISSUE_YEAR,
+            BOOK.CREATED_AT,
+            BOOK.UPDATED_AT);
+    for (var book : books) {
+      insert.values(
+          book.getId().value(),
+          book.getIsbn().value(),
+          book.getTitle().value(),
+          book.getDescription(),
+          book.getCatalogId() == null ? null : book.getCatalogId().value(),
+          book.getIssueYear() == null ? null : book.getIssueYear().getValue(),
+          OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC),
+          OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC));
     }
 
-    private void upsertBooks(DSLContext tx, List<Book> books) {
-        var insert =
-                tx.insertInto(
-                        BOOK,
-                        BOOK.ID,
-                        BOOK.ISBN,
-                        BOOK.TITLE,
-                        BOOK.DESCRIPTION,
-                        BOOK.CATALOG_ID,
-                        BOOK.ISSUE_YEAR,
-                        BOOK.CREATED_AT,
-                        BOOK.UPDATED_AT);
-        for (var book : books) {
-            insert.values(
-                    book.getId().value(),
-                    book.getIsbn().value(),
-                    book.getTitle().value(),
-                    book.getDescription(),
-                    book.getCatalogId() == null ? null : book.getCatalogId().value(),
-                    book.getIssueYear() == null ? null : book.getIssueYear().getValue(),
-                    OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC),
-                    OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC));
+    insert
+        .onConflict(BOOK.ID)
+        .doUpdate()
+        .set(BOOK.ISBN, DSL.excluded(BOOK.ISBN))
+        .set(BOOK.TITLE, DSL.excluded(BOOK.TITLE))
+        .set(BOOK.DESCRIPTION, DSL.excluded(BOOK.DESCRIPTION))
+        .set(BOOK.ISSUE_YEAR, DSL.excluded(BOOK.ISSUE_YEAR))
+        .set(BOOK.UPDATED_AT, DSL.excluded(BOOK.UPDATED_AT))
+        .set(BOOK.CATALOG_ID, DSL.excluded(BOOK.CATALOG_ID))
+        .execute();
+  }
+
+  private void addAuthorLinks(DSLContext tx, List<Book> books) {
+    var bookIds = books.stream().map(book -> book.getId().value()).toList();
+    var maxOrder = DSL.max(BOOK_AUTHOR.AUTHOR_ORDER).as("max_order");
+    var maxOrders =
+        tx.select(BOOK_AUTHOR.BOOK_ID, maxOrder)
+            .from(BOOK_AUTHOR)
+            .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
+            .groupBy(BOOK_AUTHOR.BOOK_ID)
+            .fetchMap(BOOK_AUTHOR.BOOK_ID, maxOrder);
+    var linkedAuthors =
+        tx.select(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
+            .from(BOOK_AUTHOR)
+            .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
+            .fetchGroups(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID);
+
+    var insert =
+        tx.insertInto(
+            BOOK_AUTHOR, BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID, BOOK_AUTHOR.AUTHOR_ORDER);
+    int linkCount = 0;
+    for (var book : books) {
+      var bookId = book.getId().value();
+      var existingAuthors = Set.copyOf(linkedAuthors.getOrDefault(bookId, List.of()));
+      int order = maxOrders.getOrDefault(bookId, 0);
+      for (var authorId : book.getAuthorIds()) {
+        if (existingAuthors.contains(authorId.value())) {
+          continue;
         }
-
-        insert
-                .onConflict(BOOK.ID)
-                .doUpdate()
-                .set(BOOK.ISBN, DSL.excluded(BOOK.ISBN))
-                .set(BOOK.TITLE, DSL.excluded(BOOK.TITLE))
-                .set(BOOK.DESCRIPTION, DSL.excluded(BOOK.DESCRIPTION))
-                .set(BOOK.ISSUE_YEAR, DSL.excluded(BOOK.ISSUE_YEAR))
-                .set(BOOK.UPDATED_AT, DSL.excluded(BOOK.UPDATED_AT))
-                .set(BOOK.CATALOG_ID, DSL.excluded(BOOK.CATALOG_ID))
-                .execute();
+        insert.values(bookId, authorId.value(), ++order);
+        linkCount++;
+      }
     }
-
-    private void addAuthorLinks(DSLContext tx, List<Book> books) {
-        var bookIds = books.stream().map(book -> book.getId().value()).toList();
-        var maxOrder = DSL.max(BOOK_AUTHOR.AUTHOR_ORDER).as("max_order");
-        var maxOrders =
-                tx.select(BOOK_AUTHOR.BOOK_ID, maxOrder)
-                        .from(BOOK_AUTHOR)
-                        .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
-                        .groupBy(BOOK_AUTHOR.BOOK_ID)
-                        .fetchMap(BOOK_AUTHOR.BOOK_ID, maxOrder);
-        var linkedAuthors =
-                tx.select(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
-                        .from(BOOK_AUTHOR)
-                        .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
-                        .fetchGroups(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID);
-
-        var insert =
-                tx.insertInto(
-                        BOOK_AUTHOR, BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID, BOOK_AUTHOR.AUTHOR_ORDER);
-        int linkCount = 0;
-        for (var book : books) {
-            var bookId = book.getId().value();
-            var existingAuthors = Set.copyOf(linkedAuthors.getOrDefault(bookId, List.of()));
-            int order = maxOrders.getOrDefault(bookId, 0);
-            for (var authorId : book.getAuthorIds()) {
-                if (existingAuthors.contains(authorId.value())) {
-                    continue;
-                }
-                insert.values(bookId, authorId.value(), ++order);
-                linkCount++;
-            }
-        }
-        if (linkCount > 0) {
-            insert.onConflict(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID).doNothing().execute();
-        }
+    if (linkCount > 0) {
+      insert.onConflict(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID).doNothing().execute();
     }
+  }
 
-    @Override
-    public Optional<Book> findById(Id<Book> id) {
-        return dslContext
-                .selectFrom(BOOK)
-                .where(BOOK.ID.eq(id.value()))
-                .fetchOptional()
-                .map(this::toBook);
-    }
+  @Override
+  public Optional<Book> findById(Id<Book> id) {
+    return dslContext
+        .selectFrom(BOOK)
+        .where(BOOK.ID.eq(id.value()))
+        .fetchOptional()
+        .map(this::toBook);
+  }
 
-    @Override
-    public Optional<Book> findByIsbn(Isbn isbn) {
-        return dslContext
-                .selectFrom(BOOK)
-                .where(BOOK.ISBN.eq(isbn.value()))
-                .fetchOptional()
-                .map(this::toBook);
-    }
+  @Override
+  public Optional<Book> findByIsbn(Isbn isbn) {
+    return dslContext
+        .selectFrom(BOOK)
+        .where(BOOK.ISBN.eq(isbn.value()))
+        .fetchOptional()
+        .map(this::toBook);
+  }
 
-    @Override
-    public List<Book> findByAuthor(Id<Author> authorId) {
-        return dslContext
-                .select(BOOK.asterisk())
-                .from(BOOK)
-                .join(BOOK_AUTHOR)
-                .on(BOOK_AUTHOR.BOOK_ID.eq(BOOK.ID))
-                .where(BOOK_AUTHOR.AUTHOR_ID.eq(authorId.value()))
-                .fetch()
-                .map(record -> toBook(record.into(BOOK)));
-    }
+  @Override
+  public List<Book> findByAuthor(Id<Author> authorId) {
+    return dslContext
+        .select(BOOK.asterisk())
+        .from(BOOK)
+        .join(BOOK_AUTHOR)
+        .on(BOOK_AUTHOR.BOOK_ID.eq(BOOK.ID))
+        .where(BOOK_AUTHOR.AUTHOR_ID.eq(authorId.value()))
+        .fetch()
+        .map(record -> toBook(record.into(BOOK)));
+  }
 
-    @Override
-    public List<Book> findByCatalogId(Id<Catalog> catalogId) {
-        return dslContext
-                .selectFrom(BOOK)
-                .where(BOOK.CATALOG_ID.eq(catalogId.value()))
-                .fetch()
-                .map(this::toBook);
-    }
+  @Override
+  public List<Book> findByCatalogId(Id<Catalog> catalogId) {
+    return dslContext
+        .selectFrom(BOOK)
+        .where(BOOK.CATALOG_ID.eq(catalogId.value()))
+        .fetch()
+        .map(this::toBook);
+  }
 
-    @Override
-    public void delete(Id<Book> id) {
-        dslContext.delete(BOOK).where(BOOK.ID.eq(id.value())).execute();
-    }
+  @Override
+  public void delete(Id<Book> id) {
+    dslContext.delete(BOOK).where(BOOK.ID.eq(id.value())).execute();
+  }
 
-    private Book toBook(BookRecord record) {
-        var authorIds =
-                dslContext
-                        .select(BOOK_AUTHOR.AUTHOR_ID)
-                        .from(BOOK_AUTHOR)
-                        .where(BOOK_AUTHOR.BOOK_ID.eq(record.getId()))
-                        .orderBy(BOOK_AUTHOR.AUTHOR_ORDER.asc())
-                        .fetch(BOOK_AUTHOR.AUTHOR_ID)
-                        .stream()
-                        .map(uuid -> new Id<Author>(uuid))
-                        .toList();
+  private Book toBook(BookRecord record) {
+    var authorIds =
+        dslContext
+            .select(BOOK_AUTHOR.AUTHOR_ID)
+            .from(BOOK_AUTHOR)
+            .where(BOOK_AUTHOR.BOOK_ID.eq(record.getId()))
+            .orderBy(BOOK_AUTHOR.AUTHOR_ORDER.asc())
+            .fetch(BOOK_AUTHOR.AUTHOR_ID)
+            .stream()
+            .map(uuid -> new Id<Author>(uuid))
+            .toList();
 
-        return Book.restore(
-                new Id<>(record.getId()),
-                new Isbn(record.getIsbn()),
-                new Text(record.getTitle()),
-                record.getDescription(),
-                record.getIssueYear() == null ? null : Year.of(record.getIssueYear()),
-                authorIds,
-                record.getCatalogId() == null ? null : new Id<>(record.getCatalogId()),
-                record.getCreatedAt().toInstant(),
-                record.getUpdatedAt().toInstant());
-    }
+    return Book.restore(
+        new Id<>(record.getId()),
+        new Isbn(record.getIsbn()),
+        new Text(record.getTitle()),
+        record.getDescription(),
+        record.getIssueYear() == null ? null : Year.of(record.getIssueYear()),
+        authorIds,
+        record.getCatalogId() == null ? null : new Id<>(record.getCatalogId()),
+        record.getCreatedAt().toInstant(),
+        record.getUpdatedAt().toInstant());
+  }
 }

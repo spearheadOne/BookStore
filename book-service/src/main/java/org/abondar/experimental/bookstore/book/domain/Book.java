@@ -1,5 +1,11 @@
 package org.abondar.experimental.bookstore.book.domain;
 
+import java.time.Instant;
+import java.time.Year;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.abondar.experimental.bookstore.author.domain.Author;
@@ -7,106 +13,98 @@ import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 
-import java.time.Instant;
-import java.time.Year;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-
 @Getter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public final class Book {
 
-    @EqualsAndHashCode.Include
-    private final Id<Book> id;
+  @EqualsAndHashCode.Include private final Id<Book> id;
 
-    private final Isbn isbn;
-    private final Text title;
-    private final String description;
-    private final Year issueYear;
-    private final List<Id<Author>> authorIds;
-    private final Id<Catalog> catalogId;
-    private final Instant createdAt;
-    private final Instant updatedAt;
+  private final Isbn isbn;
+  private final Text title;
+  private final String description;
+  private final Year issueYear;
+  private final List<Id<Author>> authorIds;
+  private final Id<Catalog> catalogId;
+  private final Instant createdAt;
+  private final Instant updatedAt;
 
-    private Book(
-            Id<Book> id,
-            Isbn isbn,
-            Text title,
-            String description,
-            Year issueYear,
-            List<Id<Author>> authorIds,
-            Id<Catalog> catalogId,
-            Instant createdAt,
-            Instant updatedAt) {
-        this.id = Objects.requireNonNull(id);
-        this.isbn = Objects.requireNonNull(isbn);
-        this.title = Objects.requireNonNull(title);
-        this.description = description;
-        this.issueYear = issueYear;
+  private Book(
+      Id<Book> id,
+      Isbn isbn,
+      Text title,
+      String description,
+      Year issueYear,
+      List<Id<Author>> authorIds,
+      Id<Catalog> catalogId,
+      Instant createdAt,
+      Instant updatedAt) {
+    this.id = Objects.requireNonNull(id);
+    this.isbn = Objects.requireNonNull(isbn);
+    this.title = Objects.requireNonNull(title);
+    this.description = description;
+    this.issueYear = issueYear;
 
-        this.authorIds = List.copyOf(Objects.requireNonNull(authorIds, "Author IDs must not be null"));
-        if (new HashSet<>(this.authorIds).size() != this.authorIds.size()) {
-            throw new IllegalArgumentException("Author IDs must not contain duplicates");
-        }
-
-        this.catalogId = catalogId;
-
-        this.createdAt = Objects.requireNonNull(createdAt, "Creation time must not be null");
-        this.updatedAt = Objects.requireNonNull(updatedAt, "Update time must not be null");
-
-        if (updatedAt.isBefore(createdAt)) {
-            throw new IllegalArgumentException("Updated time cannot precede creation time");
-        }
+    this.authorIds = List.copyOf(Objects.requireNonNull(authorIds, "Author IDs must not be null"));
+    if (new HashSet<>(this.authorIds).size() != this.authorIds.size()) {
+      throw new IllegalArgumentException("Author IDs must not contain duplicates");
     }
 
-    public static Book create(
-            Isbn isbn,
-            Text title,
-            String description,
-            Year issueYear,
-            List<Id<Author>> authorIds,
-            Id<Catalog> catalogId) {
-        var now = Instant.now();
+    this.catalogId = catalogId;
 
-        return new Book(
-                Id.generate(), isbn, title, description, issueYear, authorIds, catalogId, now, now);
+    this.createdAt = Objects.requireNonNull(createdAt, "Creation time must not be null");
+    this.updatedAt = Objects.requireNonNull(updatedAt, "Update time must not be null");
+
+    if (updatedAt.isBefore(createdAt)) {
+      throw new IllegalArgumentException("Updated time cannot precede creation time");
+    }
+  }
+
+  public static Book create(
+      Isbn isbn,
+      Text title,
+      String description,
+      Year issueYear,
+      List<Id<Author>> authorIds,
+      Id<Catalog> catalogId) {
+    var now = Instant.now();
+
+    return new Book(
+        Id.generate(), isbn, title, description, issueYear, authorIds, catalogId, now, now);
+  }
+
+  public static Book restore(
+      Id<Book> id,
+      Isbn isbn,
+      Text title,
+      String description,
+      Year issueYear,
+      List<Id<Author>> authorIds,
+      Id<Catalog> catalogId,
+      Instant createdAt,
+      Instant updatedAt) {
+    return new Book(
+        id, isbn, title, description, issueYear, authorIds, catalogId, createdAt, updatedAt);
+  }
+
+  public Book withAuthor(Id<Author> authorId) {
+    Objects.requireNonNull(authorId, "Author ID must not be null");
+    if (authorIds.contains(authorId)) {
+      return this;
     }
 
-    public static Book restore(
-            Id<Book> id,
-            Isbn isbn,
-            Text title,
-            String description,
-            Year issueYear,
-            List<Id<Author>> authorIds,
-            Id<Catalog> catalogId,
-            Instant createdAt,
-            Instant updatedAt) {
-        return new Book(
-                id, isbn, title, description, issueYear, authorIds, catalogId, createdAt, updatedAt);
-    }
+    var updatedAuthorIds = new ArrayList<>(authorIds);
+    updatedAuthorIds.add(authorId);
+    var now = Instant.now();
 
-    public Book withAuthor(Id<Author> authorId) {
-        Objects.requireNonNull(authorId, "Author ID must not be null");
-        if (authorIds.contains(authorId)) {
-            return this;
-        }
-
-        var updatedAuthorIds = new ArrayList<>(authorIds);
-        updatedAuthorIds.add(authorId);
-        var now = Instant.now();
-
-        return new Book(
-                id,
-                isbn,
-                title,
-                description,
-                issueYear,
-                updatedAuthorIds,
-                catalogId,
-                createdAt,
-                now.isAfter(updatedAt) ? now : updatedAt);
-    }
+    return new Book(
+        id,
+        isbn,
+        title,
+        description,
+        issueYear,
+        updatedAuthorIds,
+        catalogId,
+        createdAt,
+        now.isAfter(updatedAt) ? now : updatedAt);
+  }
 }

@@ -4,5 +4,5 @@ import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
 
 public interface UpdateCatalogNameUseCase {
-    Catalog updateCatalogName(Id<Catalog> catalogId, String name);
+  Catalog updateCatalogName(Id<Catalog> catalogId, String name);
 }

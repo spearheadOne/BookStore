@@ -15,16 +15,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Import(BaseAdapterTest.PostgresConfig.class)
 public class BaseAdapterTest {
 
-    @Autowired
-    protected DSLContext dslContext;
+  @Autowired protected DSLContext dslContext;
 
-    @TestConfiguration(proxyBeanMethods = false)
-    static class PostgresConfig {
+  @TestConfiguration(proxyBeanMethods = false)
+  static class PostgresConfig {
 
-        @Bean
-        @ServiceConnection
-        PostgreSQLContainer postgreSQLContainer() {
-            return new PostgreSQLContainer("postgres:17-alpine");
-        }
+    @Bean
+    @ServiceConnection
+    PostgreSQLContainer postgreSQLContainer() {
+      return new PostgreSQLContainer("postgres:17-alpine");
     }
+  }
 }

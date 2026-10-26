@@ -1,5 +1,7 @@
 package org.abondar.experimental.bookstore.catalog.application.service;
 
+import java.time.Instant;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogAlreadyExistsException;
@@ -16,72 +18,69 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.Optional;
-
 @Service
 @RequiredArgsConstructor
 public class CatalogService
-        implements SaveCatalogUseCase,
+    implements SaveCatalogUseCase,
         UpdateCatalogNameUseCase,
         GetCatalogUseCase,
         GetCatalogWithBooksUseCase,
         DeleteCatalogUseCase {
 
-    private final CatalogRepository catalogRepository;
+  private final CatalogRepository catalogRepository;
 
-    private final BookRepository bookRepository;
+  private final BookRepository bookRepository;
 
-    @Override
-    public void saveCatalog(Catalog catalog) {
-        var exists = catalogRepository.findByName(catalog.getName().value());
-        if (exists.isPresent()) {
-            throw new CatalogAlreadyExistsException(catalog.getName().value());
-        }
-
-        catalogRepository.save(catalog);
+  @Override
+  public void saveCatalog(Catalog catalog) {
+    var exists = catalogRepository.findByName(catalog.getName().value());
+    if (exists.isPresent()) {
+      throw new CatalogAlreadyExistsException(catalog.getName().value());
     }
 
-    @Override
-    public Catalog updateCatalogName(Id<Catalog> catalogId, String name) {
-        var catalog = catalogRepository.findById(catalogId);
-        if (catalog.isEmpty()) {
-            throw new CatalogNotFoundException();
-        }
+    catalogRepository.save(catalog);
+  }
 
-        var updatedName = new Text(name);
-        var existingName = catalogRepository.findByName(updatedName.value());
-        if (existingName.isPresent() && !existingName.get().getId().equals(catalogId)) {
-            throw new CatalogAlreadyExistsException(name);
-        }
-        var now = Instant.now();
-        var updatedAt = now.isAfter(catalog.get().getUpdatedAt()) ? now : catalog.get().getUpdatedAt();
-        var updated = Catalog.restore(catalogId, updatedName, catalog.get().getCreatedAt(), updatedAt);
-
-        catalogRepository.update(updated);
-
-        return updated;
+  @Override
+  public Catalog updateCatalogName(Id<Catalog> catalogId, String name) {
+    var catalog = catalogRepository.findById(catalogId);
+    if (catalog.isEmpty()) {
+      throw new CatalogNotFoundException();
     }
 
-    @Override
-    public Optional<Catalog> getCatalog(Id<Catalog> catalogId) {
-        return catalogRepository.findById(catalogId);
+    var updatedName = new Text(name);
+    var existingName = catalogRepository.findByName(updatedName.value());
+    if (existingName.isPresent() && !existingName.get().getId().equals(catalogId)) {
+      throw new CatalogAlreadyExistsException(name);
+    }
+    var now = Instant.now();
+    var updatedAt = now.isAfter(catalog.get().getUpdatedAt()) ? now : catalog.get().getUpdatedAt();
+    var updated = Catalog.restore(catalogId, updatedName, catalog.get().getCreatedAt(), updatedAt);
+
+    catalogRepository.update(updated);
+
+    return updated;
+  }
+
+  @Override
+  public Optional<Catalog> getCatalog(Id<Catalog> catalogId) {
+    return catalogRepository.findById(catalogId);
+  }
+
+  @Override
+  public Optional<CatalogWithBooks> getCatalogWithBooks(Id<Catalog> catalogId) {
+    var catalog = catalogRepository.findById(catalogId);
+    if (catalog.isEmpty()) {
+      return Optional.empty();
     }
 
-    @Override
-    public Optional<CatalogWithBooks> getCatalogWithBooks(Id<Catalog> catalogId) {
-        var catalog = catalogRepository.findById(catalogId);
-        if (catalog.isEmpty()) {
-            return Optional.empty();
-        }
+    var books = bookRepository.findByCatalogId(catalogId);
 
-        var books = bookRepository.findByCatalogId(catalogId);
+    return Optional.of(new CatalogWithBooks(catalog.get(), books));
+  }
 
-        return Optional.of(new CatalogWithBooks(catalog.get(), books));
-    }
-
-    @Override
-    public void deleteCatalog(Id<Catalog> catalogId) {
-        catalogRepository.delete(catalogId);
-    }
+  @Override
+  public void deleteCatalog(Id<Catalog> catalogId) {
+    catalogRepository.delete(catalogId);
+  }
 }

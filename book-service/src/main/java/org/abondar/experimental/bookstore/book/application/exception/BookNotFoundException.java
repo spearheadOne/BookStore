@@ -5,7 +5,7 @@ import org.abondar.experimental.bookstore.common.Id;
 
 public class BookNotFoundException extends RuntimeException {
 
-    public BookNotFoundException(Id<Book> id) {
-        super("Book " + id.value() + " does not exist");
-    }
+  public BookNotFoundException(Id<Book> id) {
+    super("Book " + id.value() + " does not exist");
+  }
 }

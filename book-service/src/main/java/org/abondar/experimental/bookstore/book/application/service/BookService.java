@@ -1,5 +1,7 @@
 package org.abondar.experimental.bookstore.book.application.service;
 
+import java.time.Instant;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
@@ -13,57 +15,54 @@ import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.Optional;
-
 @Service
 @RequiredArgsConstructor
 public class BookService
-        implements RegisterBookUseCase, GetBookUseCase, UpdateBookUseCase, DeleteBookUseCase {
+    implements RegisterBookUseCase, GetBookUseCase, UpdateBookUseCase, DeleteBookUseCase {
 
-    private final BookRepository bookRepository;
+  private final BookRepository bookRepository;
 
-    @Override
-    public void registerBook(Book book) {
-        var exists = bookRepository.findByIsbn(book.getIsbn()).isPresent();
+  @Override
+  public void registerBook(Book book) {
+    var exists = bookRepository.findByIsbn(book.getIsbn()).isPresent();
 
-        if (!exists) {
-            bookRepository.save(book);
-        } else {
-            throw new BookAlreadyExistsException(book.getIsbn());
-        }
+    if (!exists) {
+      bookRepository.save(book);
+    } else {
+      throw new BookAlreadyExistsException(book.getIsbn());
     }
+  }
 
-    @Override
-    public Optional<Book> getBook(Id<Book> id) {
-        return bookRepository.findById(id);
-    }
+  @Override
+  public Optional<Book> getBook(Id<Book> id) {
+    return bookRepository.findById(id);
+  }
 
-    @Override
-    public Book updateBook(UpdateBookCommand command) {
-        var existing =
-                bookRepository
-                        .findById(command.id())
-                        .orElseThrow(() -> new BookNotFoundException(command.id()));
-        var now = Instant.now();
-        var updated =
-                Book.restore(
-                        command.id(),
-                        command.isbn() != null ? command.isbn() : existing.getIsbn(),
-                        command.title() != null ? command.title() : existing.getTitle(),
-                        command.description() != null ? command.description() : existing.getDescription(),
-                        command.issueYear() != null ? command.issueYear() : existing.getIssueYear(),
-                        command.authorIds() != null ? command.authorIds() : existing.getAuthorIds(),
-                        command.catalogId() != null ? command.catalogId() : existing.getCatalogId(),
-                        existing.getCreatedAt(),
-                        now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
+  @Override
+  public Book updateBook(UpdateBookCommand command) {
+    var existing =
+        bookRepository
+            .findById(command.id())
+            .orElseThrow(() -> new BookNotFoundException(command.id()));
+    var now = Instant.now();
+    var updated =
+        Book.restore(
+            command.id(),
+            command.isbn() != null ? command.isbn() : existing.getIsbn(),
+            command.title() != null ? command.title() : existing.getTitle(),
+            command.description() != null ? command.description() : existing.getDescription(),
+            command.issueYear() != null ? command.issueYear() : existing.getIssueYear(),
+            command.authorIds() != null ? command.authorIds() : existing.getAuthorIds(),
+            command.catalogId() != null ? command.catalogId() : existing.getCatalogId(),
+            existing.getCreatedAt(),
+            now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
 
-        bookRepository.update(updated);
-        return updated;
-    }
+    bookRepository.update(updated);
+    return updated;
+  }
 
-    @Override
-    public void deleteBook(Id<Book> id) {
-        bookRepository.delete(id);
-    }
+  @Override
+  public void deleteBook(Id<Book> id) {
+    bookRepository.delete(id);
+  }
 }

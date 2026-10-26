@@ -4,5 +4,5 @@ import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
 
 public interface DeleteCatalogUseCase {
-    void deleteCatalog(Id<Catalog> catalogId);
+  void deleteCatalog(Id<Catalog> catalogId);
 }
