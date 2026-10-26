@@ -5,14 +5,6 @@ import org.abondar.experimental.bookstore.common.Id;
 
 import java.util.Optional;
 
-public interface BookOperations {
-
-    void registerBook(Book book);
-
+public interface GetBookUseCase {
     Optional<Book> getBook(Id<Book> id);
-
-    void updateBook(Book book);
-
-    void deleteBook(Id<Book> id);
-
 }

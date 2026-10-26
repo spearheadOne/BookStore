@@ -6,7 +6,10 @@ import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.RegisterBookRequest;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.UpdateBookRequest;
 import org.abondar.experimental.bookstore.author.domain.Author;
-import org.abondar.experimental.bookstore.book.application.port.in.BookOperations;
+import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.GetBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookUseCase;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.common.Id;
@@ -27,11 +30,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BookApiAdapter implements BookApi {
 
-    private final BookOperations bookOps;
+    private final RegisterBookUseCase registerBookUseCase;
+    private final GetBookUseCase getBookUseCase;
+    private final UpdateBookUseCase updateBookUseCase;
+    private final DeleteBookUseCase deleteBookUseCase;
 
     @Override
     public ResponseEntity<Void> deleteBook(UUID id) {
-        bookOps.deleteBook(new Id<>(id));
+        deleteBookUseCase.deleteBook(new Id<>(id));
         return ResponseEntity
                 .status(204)
                 .build();
@@ -39,7 +45,7 @@ public class BookApiAdapter implements BookApi {
 
     @Override
     public ResponseEntity<BookResponse> getBook(UUID id) {
-        var book = bookOps.getBook(new Id<>(id));
+        var book = getBookUseCase.getBook(new Id<>(id));
         return book.map(value -> ResponseEntity
                 .status(200)
                 .body(mapToResponse(value))).orElseGet(() -> ResponseEntity
@@ -59,7 +65,7 @@ public class BookApiAdapter implements BookApi {
                 null
         );
 
-        bookOps.registerBook(book);
+        registerBookUseCase.registerBook(book);
 
         return ResponseEntity.status(201).body(mapToResponse(book));
     }
@@ -67,7 +73,7 @@ public class BookApiAdapter implements BookApi {
     @Override
     public ResponseEntity<BookResponse> updateBook(UUID id, UpdateBookRequest updateBookRequest) {
         var bookId = new Id<Book>(id);
-        var existing = bookOps.getBook(bookId);
+        var existing = getBookUseCase.getBook(bookId);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -88,7 +94,7 @@ public class BookApiAdapter implements BookApi {
                 now.isAfter(existingBook.getUpdatedAt()) ? now : existingBook.getUpdatedAt()
         );
 
-        bookOps.updateBook(book);
+        updateBookUseCase.updateBook(book);
 
         return ResponseEntity.ok(mapToResponse(book));
     }

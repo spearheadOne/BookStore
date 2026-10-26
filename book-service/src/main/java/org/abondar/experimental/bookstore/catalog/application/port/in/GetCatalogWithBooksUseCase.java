@@ -6,16 +6,6 @@ import org.abondar.experimental.bookstore.common.Id;
 
 import java.util.Optional;
 
-public interface CatalogOperations {
-
-    void saveCatalog(Catalog catalog);
-
-    void updateCatalogName(Id<Catalog> catalogId, String name);
-
-    Optional<Catalog> getCatalog(Id<Catalog> catalogId);
-
+public interface GetCatalogWithBooksUseCase {
     Optional<CatalogWithBooks> getCatalogWithBooks(Id<Catalog> catalogId);
-
-    void deleteCatalog(Id<Catalog> catalogId);
-
 }

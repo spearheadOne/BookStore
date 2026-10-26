@@ -2,7 +2,11 @@ package org.abondar.experimental.bookstore.catalog.application.service;
 
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
-import org.abondar.experimental.bookstore.catalog.application.port.in.CatalogOperations;
+import org.abondar.experimental.bookstore.catalog.application.port.in.DeleteCatalogUseCase;
+import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalogUseCase;
+import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalogWithBooksUseCase;
+import org.abondar.experimental.bookstore.catalog.application.port.in.SaveCatalogUseCase;
+import org.abondar.experimental.bookstore.catalog.application.port.in.UpdateCatalogNameUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogRepository;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.catalog.domain.CatalogWithBooks;
@@ -15,7 +19,8 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class CatalogService implements CatalogOperations {
+public class CatalogService implements SaveCatalogUseCase, UpdateCatalogNameUseCase,
+        GetCatalogUseCase, GetCatalogWithBooksUseCase, DeleteCatalogUseCase {
 
     private final CatalogRepository catalogRepository;
 

@@ -4,7 +4,10 @@ import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
-import org.abondar.experimental.bookstore.book.application.port.in.BookOperations;
+import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.GetBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookUseCase;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
@@ -42,13 +45,23 @@ import static org.mockito.Mockito.when;
 class BookApiAdapterTest {
 
     @Mock
-    private BookOperations bookOps;
+    private RegisterBookUseCase registerBookUseCase;
+
+    @Mock
+    private GetBookUseCase getBookUseCase;
+
+    @Mock
+    private UpdateBookUseCase updateBookUseCase;
+
+    @Mock
+    private DeleteBookUseCase deleteBookUseCase;
 
     private RestTestClient client;
 
     @BeforeEach
     void setUp() {
-        client = RestTestClient.bindToController(new BookApiAdapter(bookOps))
+        client = RestTestClient.bindToController(new BookApiAdapter(
+                        registerBookUseCase, getBookUseCase, updateBookUseCase, deleteBookUseCase))
                 .configureServer(server -> server.setControllerAdvice(new BookApiExceptionHandler()))
                 .build();
     }
@@ -73,7 +86,7 @@ class BookApiAdapterTest {
                 .getResponseBody();
 
         var captor = ArgumentCaptor.forClass(Book.class);
-        verify(bookOps).registerBook(captor.capture());
+        verify(registerBookUseCase).registerBook(captor.capture());
         var book = captor.getValue();
 
         assertEquals(new Isbn("0306406152"), book.getIsbn());
@@ -97,7 +110,7 @@ class BookApiAdapterTest {
     @Test
     void getBook() {
         var book = existingBook();
-        when(bookOps.getBook(book.getId())).thenReturn(Optional.of(book));
+        when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
 
         BookResponse result = client.get()
                 .uri("/api/v1/books/{id}", book.getId().value())
@@ -115,7 +128,7 @@ class BookApiAdapterTest {
         assertEquals(book.getCatalogId().value(), result.getCatalogId());
         assertEquals(OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC), result.getCreatedAt());
         assertEquals(OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC), result.getUpdatedAt());
-        verify(bookOps).getBook(book.getId());
+        verify(getBookUseCase).getBook(book.getId());
     }
 
     @Test
@@ -129,13 +142,13 @@ class BookApiAdapterTest {
                 .exchange()
                 .expectStatus().isBadRequest();
 
-        verify(bookOps, never()).registerBook(any(Book.class));
+        verify(registerBookUseCase, never()).registerBook(any(Book.class));
     }
 
     @Test
     void registerBookWithExistingIsbn() {
         doThrow(new BookAlreadyExistsException(new Isbn("0306406152")))
-                .when(bookOps).registerBook(any(Book.class));
+                .when(registerBookUseCase).registerBook(any(Book.class));
 
         client.post()
                 .uri("/api/v1/books")
@@ -150,7 +163,7 @@ class BookApiAdapterTest {
     @Test
     void getMissingBook() {
         var id = UUID.randomUUID();
-        when(bookOps.getBook(new Id<Book>(id))).thenReturn(Optional.empty());
+        when(getBookUseCase.getBook(new Id<Book>(id))).thenReturn(Optional.empty());
 
         client.get()
                 .uri("/api/v1/books/{id}", id)
@@ -164,7 +177,7 @@ class BookApiAdapterTest {
         var existing = existingBook();
         var newAuthorId = UUID.randomUUID();
         var newCatalogId = UUID.randomUUID();
-        when(bookOps.getBook(existing.getId())).thenReturn(Optional.of(existing));
+        when(getBookUseCase.getBook(existing.getId())).thenReturn(Optional.of(existing));
 
         BookResponse result = client.put()
                 .uri("/api/v1/books/{id}", existing.getId().value())
@@ -186,7 +199,7 @@ class BookApiAdapterTest {
                 .getResponseBody();
 
         var captor = ArgumentCaptor.forClass(Book.class);
-        verify(bookOps).updateBook(captor.capture());
+        verify(updateBookUseCase).updateBook(captor.capture());
         var updated = captor.getValue();
 
         assertEquals(existing.getId(), updated.getId());
@@ -208,7 +221,7 @@ class BookApiAdapterTest {
     @Test
     void updateMissingBook() {
         var id = UUID.randomUUID();
-        when(bookOps.getBook(new Id<>(id))).thenReturn(Optional.empty());
+        when(getBookUseCase.getBook(new Id<>(id))).thenReturn(Optional.empty());
 
         client.put()
                 .uri("/api/v1/books/{id}", id)
@@ -220,15 +233,15 @@ class BookApiAdapterTest {
                 .expectStatus().isNotFound()
                 .expectBody().isEmpty();
 
-        verify(bookOps, never()).updateBook(any(Book.class));
+        verify(updateBookUseCase, never()).updateBook(any(Book.class));
     }
 
     @Test
     void updateBookDeletedAfterLookup() {
         var existing = existingBook();
-        when(bookOps.getBook(existing.getId())).thenReturn(Optional.of(existing));
+        when(getBookUseCase.getBook(existing.getId())).thenReturn(Optional.of(existing));
         doThrow(new BookNotFoundException(existing.getId()))
-                .when(bookOps).updateBook(any(Book.class));
+                .when(updateBookUseCase).updateBook(any(Book.class));
 
         client.put()
                 .uri("/api/v1/books/{id}", existing.getId().value())
@@ -243,9 +256,9 @@ class BookApiAdapterTest {
     @Test
     void updateBookWithExistingIsbn() {
         var existing = existingBook();
-        when(bookOps.getBook(existing.getId())).thenReturn(Optional.of(existing));
+        when(getBookUseCase.getBook(existing.getId())).thenReturn(Optional.of(existing));
         doThrow(new BookAlreadyExistsException(new Isbn("9780306406157")))
-                .when(bookOps).updateBook(any(Book.class));
+                .when(updateBookUseCase).updateBook(any(Book.class));
 
         client.put()
                 .uri("/api/v1/books/{id}", existing.getId().value())
@@ -267,7 +280,7 @@ class BookApiAdapterTest {
                 .expectStatus().isNoContent()
                 .expectBody().isEmpty();
 
-        verify(bookOps).deleteBook(new Id<>(id));
+        verify(deleteBookUseCase).deleteBook(new Id<>(id));
     }
 
     private Book existingBook() {

@@ -1,7 +1,13 @@
 package org.abondar.experimental.bookstore.author.application.service;
 
 import lombok.RequiredArgsConstructor;
-import org.abondar.experimental.bookstore.author.application.port.in.AuthorOperations;
+import org.abondar.experimental.bookstore.author.application.port.in.DeleteAuthorUseCase;
+import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorByIdUseCase;
+import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorWithBooksByIdUseCase;
+import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorsBySortNameUseCase;
+import org.abondar.experimental.bookstore.author.application.port.in.SaveAuthorUseCase;
+import org.abondar.experimental.bookstore.author.application.port.in.SaveAuthorWithBooksUseCase;
+import org.abondar.experimental.bookstore.author.application.port.in.UpdateAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorRepository;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.author.domain.AuthorWithBooks;
@@ -16,7 +22,9 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class AuthorService implements AuthorOperations {
+public class AuthorService implements SaveAuthorUseCase, SaveAuthorWithBooksUseCase,
+        UpdateAuthorUseCase, GetAuthorByIdUseCase, GetAuthorWithBooksByIdUseCase,
+        GetAuthorsBySortNameUseCase, DeleteAuthorUseCase {
 
     private final AuthorRepository authorRepository;
 

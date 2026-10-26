@@ -2,7 +2,10 @@ package org.abondar.experimental.bookstore.book.application.service;
 
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
-import org.abondar.experimental.bookstore.book.application.port.in.BookOperations;
+import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.GetBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
@@ -12,7 +15,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class BookService implements BookOperations {
+public class BookService implements RegisterBookUseCase, GetBookUseCase, UpdateBookUseCase, DeleteBookUseCase {
 
     private final BookRepository bookRepository;
 
