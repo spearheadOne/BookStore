@@ -16,7 +16,7 @@ public record UpdateAuthorCommand(
         LocalDate dateOfDeath,
         String countryCode,
         String biography) {
-    public UpdateAuthorCommand {
-        Objects.requireNonNull(id, "Author ID must not be null");
-    }
+  public UpdateAuthorCommand {
+    Objects.requireNonNull(id, "Author ID must not be null");
+  }
 }

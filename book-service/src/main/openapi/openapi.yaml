@@ -221,8 +221,159 @@ paths:
         '404':
           description: Author not found
 
+  /api/v1/catalogs:
+    post:
+      tags: [ Catalog ]
+      operationId: registerCatalog
+      summary: Register a catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCatalogRequest'
+      responses:
+        '201':
+          description: Catalog registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogResponse'
+        '400':
+          description: Invalid catalog data
+        '409':
+          description: Catalog name already exists
+
+  /api/v1/catalogs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [ Catalog ]
+      operationId: getCatalog
+      summary: Get a catalog by ID
+      responses:
+        '200':
+          description: Catalog found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogResponse'
+        '404':
+          description: Catalog not found
+    delete:
+      tags: [ Catalog ]
+      operationId: deleteCatalog
+      summary: Delete a catalog by ID
+      responses:
+        '204':
+          description: Catalog deleted
+        '409':
+          description: Catalog still has books
+
+  /api/v1/catalogs/{id}/rename:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [ Catalog ]
+      operationId: updateCatalogName
+      summary: Rename a catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameCatalogRequest'
+      responses:
+        '200':
+          description: Catalog renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogResponse'
+        '400':
+          description: Invalid catalog name
+        '404':
+          description: Catalog not found
+        '409':
+          description: Catalog name already exists
+
+  /api/v1/catalogs/{id}/books:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [ Catalog ]
+      operationId: getCatalogWithBooks
+      summary: Get a catalog and its books
+      responses:
+        '200':
+          description: Catalog and books found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogWithBooksResponse'
+        '404':
+          description: Catalog not found
+
 components:
   schemas:
+    RegisterCatalogRequest:
+      type: object
+      required: [ name ]
+      properties:
+        name:
+          type: string
+          minLength: 1
+
+    RenameCatalogRequest:
+      type: object
+      required: [ name ]
+      properties:
+        name:
+          type: string
+          minLength: 1
+
+    CatalogResponse:
+      type: object
+      required: [ id, name, createdAt, updatedAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CatalogWithBooksResponse:
+      type: object
+      required: [ catalog, books ]
+      properties:
+        catalog:
+          $ref: '#/components/schemas/CatalogResponse'
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookResponse'
+
     RegisterAuthorRequest:
       type: object
       required: [ firstName, lastName ]

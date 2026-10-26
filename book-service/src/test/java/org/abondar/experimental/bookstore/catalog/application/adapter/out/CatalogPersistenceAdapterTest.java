@@ -2,6 +2,7 @@ package org.abondar.experimental.bookstore.catalog.application.adapter.out;
 
 import org.abondar.experimental.bookstore.BaseAdapterTest;
 import org.abondar.experimental.bookstore.catalog.adapter.out.CatalogPersistenceAdapter;
+import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
@@ -72,7 +73,7 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
     public void updateMissingCatalogDoesNotInsertIt() {
         var catalog = Catalog.create(new Text("Absent catalog"));
 
-        assertThrows(IllegalArgumentException.class, () -> adapter.update(catalog));
+        assertThrows(CatalogNotFoundException.class, () -> adapter.update(catalog));
         assertTrue(adapter.findById(catalog.getId()).isEmpty());
     }
 

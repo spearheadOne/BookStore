@@ -2,6 +2,7 @@ package org.abondar.experimental.bookstore.catalog.adapter.out;
 
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.records.CatalogRecord;
+import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogRepository;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
@@ -47,7 +48,7 @@ public class CatalogPersistenceAdapter implements CatalogRepository {
                         .where(CATALOG.ID.eq(catalog.getId().value()))
                         .execute();
         if (affected == 0) {
-            throw new IllegalArgumentException("Catalog not found");
+            throw new CatalogNotFoundException();
         }
     }
 

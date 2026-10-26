@@ -3,6 +3,8 @@ package org.abondar.experimental.bookstore.catalog.application.service;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
+import org.abondar.experimental.bookstore.catalog.application.exception.CatalogAlreadyExistsException;
+import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogRepository;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
@@ -55,7 +57,7 @@ public class CatalogServiceTest {
         var catalog = Catalog.create(new Text("Main catalog"));
         when(catalogRepository.findByName(catalog.getName().value())).thenReturn(Optional.of(catalog));
 
-        assertThrows(IllegalArgumentException.class, () -> catalogService.saveCatalog(catalog));
+        assertThrows(CatalogAlreadyExistsException.class, () -> catalogService.saveCatalog(catalog));
 
         verify(catalogRepository, never()).save(catalog);
     }
@@ -65,11 +67,12 @@ public class CatalogServiceTest {
         var catalog = Catalog.create(new Text("Before rename"));
         when(catalogRepository.findById(catalog.getId())).thenReturn(Optional.of(catalog));
 
-        catalogService.updateCatalogName(catalog.getId(), "After rename");
+        var result = catalogService.updateCatalogName(catalog.getId(), "After rename");
 
         var saved = ArgumentCaptor.forClass(Catalog.class);
         verify(catalogRepository).update(saved.capture());
         assertAll(
+                () -> assertSame(saved.getValue(), result),
                 () -> assertEquals(catalog.getId(), saved.getValue().getId()),
                 () -> assertEquals(new Text("After rename"), saved.getValue().getName()),
                 () -> assertEquals(catalog.getCreatedAt(), saved.getValue().getCreatedAt()),
@@ -95,7 +98,7 @@ public class CatalogServiceTest {
         when(catalogRepository.findByName(other.getName().value())).thenReturn(Optional.of(other));
 
         assertThrows(
-                IllegalArgumentException.class,
+                CatalogAlreadyExistsException.class,
                 () -> catalogService.updateCatalogName(catalog.getId(), other.getName().value()));
 
         verify(catalogRepository, never()).update(any(Catalog.class));
@@ -106,7 +109,7 @@ public class CatalogServiceTest {
         Id<Catalog> id = Id.generate();
 
         assertThrows(
-                IllegalArgumentException.class, () -> catalogService.updateCatalogName(id, "New name"));
+                CatalogNotFoundException.class, () -> catalogService.updateCatalogName(id, "New name"));
 
         verify(catalogRepository, never()).update(any(Catalog.class));
     }

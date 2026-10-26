@@ -2,6 +2,8 @@ package org.abondar.experimental.bookstore.catalog.application.service;
 
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
+import org.abondar.experimental.bookstore.catalog.application.exception.CatalogAlreadyExistsException;
+import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
 import org.abondar.experimental.bookstore.catalog.application.port.in.DeleteCatalogUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalogUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalogWithBooksUseCase;
@@ -34,27 +36,31 @@ public class CatalogService
     public void saveCatalog(Catalog catalog) {
         var exists = catalogRepository.findByName(catalog.getName().value());
         if (exists.isPresent()) {
-            throw new IllegalArgumentException("Catalog already exists");
+            throw new CatalogAlreadyExistsException(catalog.getName().value());
         }
 
         catalogRepository.save(catalog);
     }
 
     @Override
-    public void updateCatalogName(Id<Catalog> catalogId, String name) {
+    public Catalog updateCatalogName(Id<Catalog> catalogId, String name) {
         var catalog = catalogRepository.findById(catalogId);
         if (catalog.isEmpty()) {
-            throw new IllegalArgumentException("Catalog not found");
+            throw new CatalogNotFoundException();
         }
 
         var updatedName = new Text(name);
         var existingName = catalogRepository.findByName(updatedName.value());
         if (existingName.isPresent() && !existingName.get().getId().equals(catalogId)) {
-            throw new IllegalArgumentException("Name already exists");
+            throw new CatalogAlreadyExistsException(name);
         }
+        var now = Instant.now();
+        var updatedAt = now.isAfter(catalog.get().getUpdatedAt()) ? now : catalog.get().getUpdatedAt();
+        var updated = Catalog.restore(catalogId, updatedName, catalog.get().getCreatedAt(), updatedAt);
 
-        catalogRepository.update(
-                Catalog.restore(catalogId, updatedName, catalog.get().getCreatedAt(), Instant.now()));
+        catalogRepository.update(updated);
+
+        return updated;
     }
 
     @Override

@@ -1,13 +1,5 @@
 package org.abondar.experimental.bookstore.author.adapter.out;
 
-import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.Author.AUTHOR;
-
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.records.AuthorRecord;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
@@ -17,6 +9,15 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
+
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.Author.AUTHOR;
 
 @Repository
 @RequiredArgsConstructor

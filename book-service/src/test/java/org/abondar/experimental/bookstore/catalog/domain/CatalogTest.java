@@ -1,15 +1,15 @@
 package org.abondar.experimental.bookstore.catalog.domain;
 
+import org.abondar.experimental.bookstore.common.Id;
+import org.abondar.experimental.bookstore.common.Text;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import java.time.Instant;
-
-import org.abondar.experimental.bookstore.common.Id;
-import org.abondar.experimental.bookstore.common.Text;
-import org.junit.jupiter.api.Test;
 
 class CatalogTest {
 
