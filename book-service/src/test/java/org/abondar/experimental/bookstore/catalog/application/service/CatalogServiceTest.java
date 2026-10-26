@@ -53,8 +53,7 @@ public class CatalogServiceTest {
     @Test
     public void rejectExistingCatalogName() {
         var catalog = Catalog.create(new Text("Main catalog"));
-        when(catalogRepository.findByName(catalog.getName().value()))
-                .thenReturn(Optional.of(catalog));
+        when(catalogRepository.findByName(catalog.getName().value())).thenReturn(Optional.of(catalog));
 
         assertThrows(IllegalArgumentException.class, () -> catalogService.saveCatalog(catalog));
 
@@ -74,8 +73,7 @@ public class CatalogServiceTest {
                 () -> assertEquals(catalog.getId(), saved.getValue().getId()),
                 () -> assertEquals(new Text("After rename"), saved.getValue().getName()),
                 () -> assertEquals(catalog.getCreatedAt(), saved.getValue().getCreatedAt()),
-                () -> assertFalse(saved.getValue().getUpdatedAt().isBefore(catalog.getUpdatedAt()))
-        );
+                () -> assertFalse(saved.getValue().getUpdatedAt().isBefore(catalog.getUpdatedAt())));
     }
 
     @Test
@@ -96,7 +94,8 @@ public class CatalogServiceTest {
         when(catalogRepository.findById(catalog.getId())).thenReturn(Optional.of(catalog));
         when(catalogRepository.findByName(other.getName().value())).thenReturn(Optional.of(other));
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> catalogService.updateCatalogName(catalog.getId(), other.getName().value()));
 
         verify(catalogRepository, never()).update(any(Catalog.class));
@@ -106,8 +105,8 @@ public class CatalogServiceTest {
     public void updateMissingCatalog() {
         Id<Catalog> id = Id.generate();
 
-        assertThrows(IllegalArgumentException.class,
-                () -> catalogService.updateCatalogName(id, "New name"));
+        assertThrows(
+                IllegalArgumentException.class, () -> catalogService.updateCatalogName(id, "New name"));
 
         verify(catalogRepository, never()).update(any(Catalog.class));
     }
@@ -130,8 +129,9 @@ public class CatalogServiceTest {
     @Test
     public void getCatalogWithBooks() {
         var catalog = Catalog.create(new Text("Main catalog"));
-        var book = Book.create(new Isbn("0306406152"), new Text("Book"),
-                null, null, List.of(), catalog.getId());
+        var book =
+                Book.create(
+                        new Isbn("0306406152"), new Text("Book"), null, null, List.of(), catalog.getId());
         when(catalogRepository.findById(catalog.getId())).thenReturn(Optional.of(catalog));
         when(bookRepository.findByCatalogId(catalog.getId())).thenReturn(List.of(book));
 
@@ -139,8 +139,7 @@ public class CatalogServiceTest {
 
         assertAll(
                 () -> assertSame(catalog, found.catalog()),
-                () -> assertEquals(List.of(book), found.books())
-        );
+                () -> assertEquals(List.of(book), found.books()));
     }
 
     @Test

@@ -10,21 +10,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TextTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "test",
-            " test",
-            "test "
-    })
+    @ValueSource(strings = {"test", " test", "test "})
     void acceptsValues(String value) {
         var field = new Text(value);
         assertEquals("test", field.value());
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "",
-            " "
-    })
+    @ValueSource(strings = {"", " "})
     void rejectsValues(String value) {
         assertThrows(IllegalArgumentException.class, () -> new Text(value));
     }
@@ -33,5 +26,4 @@ public class TextTest {
     void rejectsNullTitle() {
         assertThrows(NullPointerException.class, () -> new Text(null));
     }
-
 }

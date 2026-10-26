@@ -12,5 +12,4 @@ public record Id<T>(UUID value) {
     public static <T> Id<T> generate() {
         return new Id<T>(UUID.randomUUID());
     }
-
 }

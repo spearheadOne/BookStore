@@ -25,16 +25,9 @@ public class AuthorTest {
         var countryCode = "DE";
         var biography = "test";
 
-        var author = Author.create(
-                firstName,
-                lastName,
-                sortName,
-                dateOfBirth,
-                dateOfDeath,
-                countryCode,
-                biography
-        );
-
+        var author =
+                Author.create(
+                        firstName, lastName, sortName, dateOfBirth, dateOfDeath, countryCode, biography);
 
         assertAll(
                 () -> assertNotNull(author.getId()),
@@ -46,9 +39,7 @@ public class AuthorTest {
                 () -> assertEquals(countryCode, author.getCountryCode()),
                 () -> assertEquals(biography, author.getBiography()),
                 () -> assertNotNull(author.getCreatedAt()),
-                () -> assertEquals(author.getCreatedAt(), author.getUpdatedAt())
-        );
-
+                () -> assertEquals(author.getCreatedAt(), author.getUpdatedAt()));
     }
 
     @Test
@@ -56,16 +47,7 @@ public class AuthorTest {
         var firstName = new Text("test");
         var lastName = new Text("test");
 
-        var author = Author.create(
-                firstName,
-                lastName,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
-
+        var author = Author.create(firstName, lastName, null, null, null, null, null);
 
         assertAll(
                 () -> assertNotNull(author.getId()),
@@ -75,43 +57,21 @@ public class AuthorTest {
                 () -> assertNull(author.getDateOfBirth()),
                 () -> assertNull(author.getDateOfDeath()),
                 () -> assertNull(author.getCountryCode()),
-                () -> assertNull(author.getBiography())
-        );
-
+                () -> assertNull(author.getBiography()));
     }
 
     @Test
     void rejectsWithNullLastName() {
         assertThrows(
                 NullPointerException.class,
-                () -> Author.create(
-                        new Text("test"),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                )
-        );
-
+                () -> Author.create(new Text("test"), null, null, null, null, null, null));
     }
 
     @Test
     void rejectsWithNullFirstName() {
         assertThrows(
                 NullPointerException.class,
-                () -> Author.create(
-                        null,
-                        new Text("test"),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                )
-        );
-
+                () -> Author.create(null, new Text("test"), null, null, null, null, null));
     }
 
     @Test
@@ -124,18 +84,8 @@ public class AuthorTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> Author.create(
-                        firstName,
-                        lastName,
-                        sortName,
-                        dateOfBirth,
-                        dateOfDeath,
-                        null,
-                        null
-                )
-        );
+                () -> Author.create(firstName, lastName, sortName, dateOfBirth, dateOfDeath, null, null));
     }
-
 
     @Test
     void rejectMisformattedCountryCode() {
@@ -146,16 +96,7 @@ public class AuthorTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> Author.create(
-                        firstName,
-                        lastName,
-                        sortName,
-                        null,
-                        null,
-                        countryCode,
-                        null
-                )
-        );
+                () -> Author.create(firstName, lastName, sortName, null, null, countryCode, null));
     }
 
     @Test
@@ -168,28 +109,22 @@ public class AuthorTest {
         var countryCode = "DE";
         var biography = "test";
 
-        var author = Author.create(
-                firstName,
-                lastName,
-                sortName,
-                dateOfBirth,
-                dateOfDeath,
-                countryCode,
-                biography
-        );
+        var author =
+                Author.create(
+                        firstName, lastName, sortName, dateOfBirth, dateOfDeath, countryCode, biography);
 
-        var restored = Author.restore(
-                author.getId(),
-                firstName,
-                lastName,
-                sortName,
-                dateOfBirth,
-                dateOfDeath,
-                countryCode,
-                biography,
-                author.getCreatedAt(),
-                author.getUpdatedAt()
-        );
+        var restored =
+                Author.restore(
+                        author.getId(),
+                        firstName,
+                        lastName,
+                        sortName,
+                        dateOfBirth,
+                        dateOfDeath,
+                        countryCode,
+                        biography,
+                        author.getCreatedAt(),
+                        author.getUpdatedAt());
 
         assertAll(
                 () -> assertEquals(author.getId(), restored.getId()),
@@ -201,9 +136,7 @@ public class AuthorTest {
                 () -> assertEquals(author.getCountryCode(), restored.getCountryCode()),
                 () -> assertEquals(author.getBiography(), restored.getBiography()),
                 () -> assertEquals(author.getCreatedAt(), restored.getCreatedAt()),
-                () -> assertEquals(author.getUpdatedAt(), restored.getUpdatedAt())
-        );
-
+                () -> assertEquals(author.getUpdatedAt(), restored.getUpdatedAt()));
     }
 
     @Test
@@ -213,18 +146,17 @@ public class AuthorTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> Author.restore(
-                        Id.generate(),
-                        new Text("Test"),
-                        new Text("Test"),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        createdAt,
-                        updatedAt
-                )
-        );
+                () ->
+                        Author.restore(
+                                Id.generate(),
+                                new Text("Test"),
+                                new Text("Test"),
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                createdAt,
+                                updatedAt));
     }
 }

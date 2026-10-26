@@ -19,8 +19,12 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class CatalogService implements SaveCatalogUseCase, UpdateCatalogNameUseCase,
-        GetCatalogUseCase, GetCatalogWithBooksUseCase, DeleteCatalogUseCase {
+public class CatalogService
+        implements SaveCatalogUseCase,
+        UpdateCatalogNameUseCase,
+        GetCatalogUseCase,
+        GetCatalogWithBooksUseCase,
+        DeleteCatalogUseCase {
 
     private final CatalogRepository catalogRepository;
 
@@ -50,13 +54,7 @@ public class CatalogService implements SaveCatalogUseCase, UpdateCatalogNameUseC
         }
 
         catalogRepository.update(
-                Catalog.restore(
-                        catalogId,
-                        updatedName,
-                        catalog.get().getCreatedAt(),
-                        Instant.now()
-                )
-        );
+                Catalog.restore(catalogId, updatedName, catalog.get().getCreatedAt(), Instant.now()));
     }
 
     @Override

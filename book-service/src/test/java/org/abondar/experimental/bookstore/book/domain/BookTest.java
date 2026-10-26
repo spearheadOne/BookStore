@@ -28,14 +28,7 @@ public class BookTest {
         List<Id<Author>> authorIds = List.of(Id.generate(), Id.generate());
         Id<Catalog> catalogId = Id.generate();
 
-        var book = Book.create(
-                isbn,
-                title,
-                description,
-                issueYear,
-                authorIds,
-                catalogId
-        );
+        var book = Book.create(isbn, title, description, issueYear, authorIds, catalogId);
 
         assertAll(
                 () -> assertNotNull(book.getId()),
@@ -46,8 +39,7 @@ public class BookTest {
                 () -> assertEquals(authorIds, book.getAuthorIds()),
                 () -> assertEquals(catalogId, book.getCatalogId()),
                 () -> assertNotNull(book.getCreatedAt()),
-                () -> assertEquals(book.getCreatedAt(), book.getUpdatedAt())
-        );
+                () -> assertEquals(book.getCreatedAt(), book.getUpdatedAt()));
     }
 
     @Test
@@ -55,14 +47,7 @@ public class BookTest {
         var isbn = new Isbn("0306406152");
         var title = new Text("test");
 
-        var book = Book.create(
-                isbn,
-                title,
-                null,
-                null,
-                List.of(),
-                null
-        );
+        var book = Book.create(isbn, title, null, null, List.of(), null);
 
         assertAll(
                 () -> assertNotNull(book.getId()),
@@ -73,53 +58,28 @@ public class BookTest {
                 () -> assertEquals(List.of(), book.getAuthorIds()),
                 () -> assertNull(book.getCatalogId()),
                 () -> assertNotNull(book.getCreatedAt()),
-                () -> assertEquals(book.getCreatedAt(), book.getUpdatedAt())
-        );
+                () -> assertEquals(book.getCreatedAt(), book.getUpdatedAt()));
     }
 
     @Test
     void rejectsNullIsbn() {
         assertThrows(
                 NullPointerException.class,
-                () -> Book.create(
-                        null,
-                        new Text("test"),
-                        null,
-                        null,
-                        List.of(),
-                        null
-                )
-        );
+                () -> Book.create(null, new Text("test"), null, null, List.of(), null));
     }
 
     @Test
     void rejectsNullTitle() {
         assertThrows(
                 NullPointerException.class,
-                () -> Book.create(
-                        new Isbn("0306406152"),
-                        null,
-                        null,
-                        null,
-                        List.of(),
-                        null
-                )
-        );
+                () -> Book.create(new Isbn("0306406152"), null, null, null, List.of(), null));
     }
 
     @Test
     void rejectsNullAuthorIds() {
         assertThrows(
                 NullPointerException.class,
-                () -> Book.create(
-                        new Isbn("0306406152"),
-                        new Text("test"),
-                        null,
-                        null,
-                        null,
-                        null
-                )
-        );
+                () -> Book.create(new Isbn("0306406152"), new Text("test"), null, null, null, null));
     }
 
     @Test
@@ -131,27 +91,19 @@ public class BookTest {
         List<Id<Author>> authorIds = List.of(Id.generate(), Id.generate());
         Id<Catalog> catalogId = Id.generate();
 
+        var book = Book.create(isbn, title, description, issueYear, authorIds, catalogId);
 
-        var book = Book.create(
-                isbn,
-                title,
-                description,
-                issueYear,
-                authorIds,
-                catalogId
-        );
-
-        var restored = Book.restore(
-                book.getId(),
-                isbn,
-                title,
-                description,
-                issueYear,
-                authorIds,
-                catalogId,
-                book.getCreatedAt(),
-                book.getUpdatedAt()
-        );
+        var restored =
+                Book.restore(
+                        book.getId(),
+                        isbn,
+                        title,
+                        description,
+                        issueYear,
+                        authorIds,
+                        catalogId,
+                        book.getCreatedAt(),
+                        book.getUpdatedAt());
 
         assertAll(
                 () -> assertEquals(book.getId(), restored.getId()),
@@ -162,8 +114,7 @@ public class BookTest {
                 () -> assertEquals(authorIds, restored.getAuthorIds()),
                 () -> assertEquals(catalogId, restored.getCatalogId()),
                 () -> assertEquals(book.getCreatedAt(), restored.getCreatedAt()),
-                () -> assertEquals(book.getUpdatedAt(), restored.getUpdatedAt())
-        );
+                () -> assertEquals(book.getUpdatedAt(), restored.getUpdatedAt()));
     }
 
     @Test
@@ -173,18 +124,17 @@ public class BookTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> Book.restore(
-                        Id.generate(),
-                        new Isbn("0306406152"),
-                        new Text("Test"),
-                        null,
-                        Year.of(2026),
-                        List.of(),
-                        null,
-                        createdAt,
-                        updatedAt
-                )
-        );
+                () ->
+                        Book.restore(
+                                Id.generate(),
+                                new Isbn("0306406152"),
+                                new Text("Test"),
+                                null,
+                                Year.of(2026),
+                                List.of(),
+                                null,
+                                createdAt,
+                                updatedAt));
     }
 
     @Test
@@ -193,14 +143,7 @@ public class BookTest {
         Id<Author> second = Id.generate();
         var supplied = new ArrayList<>(List.of(first, second));
 
-        var book = Book.create(
-                new Isbn("0306406152"),
-                new Text("Test"),
-                null,
-                null,
-                supplied,
-                null
-        );
+        var book = Book.create(new Isbn("0306406152"), new Text("Test"), null, null, supplied, null);
         supplied.clear();
 
         assertEquals(List.of(first, second), book.getAuthorIds());
@@ -211,24 +154,24 @@ public class BookTest {
     void rejectsDuplicateAuthorIds() {
         Id<Author> authorId = Id.generate();
 
-        assertThrows(IllegalArgumentException.class, () ->
-                Book.create(
-                        new Isbn("0306406152"),
-                        new Text("Test"),
-                        null,
-                        null,
-                        List.of(authorId, authorId),
-                        null
-                )
-        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        Book.create(
+                                new Isbn("0306406152"),
+                                new Text("Test"),
+                                null,
+                                null,
+                                List.of(authorId, authorId),
+                                null));
     }
 
     @Test
     void addsAuthorWithoutChangingOriginalBook() {
         Id<Author> first = Id.generate();
         Id<Author> second = Id.generate();
-        var book = Book.create(new Isbn("0306406152"), new Text("Test"),
-                null, null, List.of(first), null);
+        var book =
+                Book.create(new Isbn("0306406152"), new Text("Test"), null, null, List.of(first), null);
 
         var withSecondAuthor = book.withAuthor(second);
 
@@ -237,9 +180,6 @@ public class BookTest {
                 () -> assertEquals(List.of(first, second), withSecondAuthor.getAuthorIds()),
                 () -> assertEquals(book.getId(), withSecondAuthor.getId()),
                 () -> assertEquals(book.getCreatedAt(), withSecondAuthor.getCreatedAt()),
-                () -> assertEquals(withSecondAuthor, withSecondAuthor.withAuthor(second))
-        );
+                () -> assertEquals(withSecondAuthor, withSecondAuthor.withAuthor(second)));
     }
-
-
 }

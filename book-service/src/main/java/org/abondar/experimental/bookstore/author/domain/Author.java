@@ -35,22 +35,18 @@ public final class Author {
             String countryCode,
             String biography,
             Instant createdAt,
-            Instant updatedAt
-    ) {
+            Instant updatedAt) {
         this.id = Objects.requireNonNull(id);
         this.firstName = Objects.requireNonNull(firstName);
         this.lastName = Objects.requireNonNull(lastName);
 
         this.sortName = sortName;
 
-
         this.dateOfBirth = dateOfBirth;
         this.dateOfDeath = dateOfDeath;
 
         if (dateOfBirth != null && dateOfDeath != null && dateOfDeath.isBefore(dateOfBirth)) {
-            throw new IllegalArgumentException(
-                    "Date of death cannot precede date of birth"
-            );
+            throw new IllegalArgumentException("Date of death cannot precede date of birth");
         }
 
         this.countryCode = countryCode;
@@ -60,19 +56,11 @@ public final class Author {
 
         this.biography = biography;
 
-        this.createdAt = Objects.requireNonNull(
-                createdAt,
-                "Creation time must not be null"
-        );
-        this.updatedAt = Objects.requireNonNull(
-                updatedAt,
-                "Update time must not be null"
-        );
+        this.createdAt = Objects.requireNonNull(createdAt, "Creation time must not be null");
+        this.updatedAt = Objects.requireNonNull(updatedAt, "Update time must not be null");
 
         if (updatedAt.isBefore(createdAt)) {
-            throw new IllegalArgumentException(
-                    "Updated time cannot precede creation time"
-            );
+            throw new IllegalArgumentException("Updated time cannot precede creation time");
         }
     }
 
@@ -83,8 +71,7 @@ public final class Author {
             LocalDate dateOfBirth,
             LocalDate dateOfDeath,
             String countryCode,
-            String biography
-    ) {
+            String biography) {
         var now = Instant.now();
 
         return new Author(
@@ -97,8 +84,7 @@ public final class Author {
                 countryCode,
                 biography,
                 now,
-                now
-        );
+                now);
     }
 
     public static Author restore(
@@ -111,8 +97,7 @@ public final class Author {
             String countryCode,
             String biography,
             Instant createdAt,
-            Instant updatedAt
-    ) {
+            Instant updatedAt) {
         return new Author(
                 id,
                 firstName,
@@ -123,8 +108,6 @@ public final class Author {
                 countryCode,
                 biography,
                 createdAt,
-                updatedAt
-        );
+                updatedAt);
     }
-
 }

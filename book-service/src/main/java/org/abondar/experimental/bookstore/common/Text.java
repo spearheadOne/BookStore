@@ -12,5 +12,4 @@ public record Text(String value) {
             throw new IllegalArgumentException("Value must not be blank");
         }
     }
-
 }

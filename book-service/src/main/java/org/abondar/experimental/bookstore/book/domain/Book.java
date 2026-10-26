@@ -39,8 +39,7 @@ public final class Book {
             List<Id<Author>> authorIds,
             Id<Catalog> catalogId,
             Instant createdAt,
-            Instant updatedAt
-    ) {
+            Instant updatedAt) {
         this.id = Objects.requireNonNull(id);
         this.isbn = Objects.requireNonNull(isbn);
         this.title = Objects.requireNonNull(title);
@@ -54,19 +53,11 @@ public final class Book {
 
         this.catalogId = catalogId;
 
-        this.createdAt = Objects.requireNonNull(
-                createdAt,
-                "Creation time must not be null"
-        );
-        this.updatedAt = Objects.requireNonNull(
-                updatedAt,
-                "Update time must not be null"
-        );
+        this.createdAt = Objects.requireNonNull(createdAt, "Creation time must not be null");
+        this.updatedAt = Objects.requireNonNull(updatedAt, "Update time must not be null");
 
         if (updatedAt.isBefore(createdAt)) {
-            throw new IllegalArgumentException(
-                    "Updated time cannot precede creation time"
-            );
+            throw new IllegalArgumentException("Updated time cannot precede creation time");
         }
     }
 
@@ -76,21 +67,11 @@ public final class Book {
             String description,
             Year issueYear,
             List<Id<Author>> authorIds,
-            Id<Catalog> catalogId
-    ) {
+            Id<Catalog> catalogId) {
         var now = Instant.now();
 
         return new Book(
-                Id.generate(),
-                isbn,
-                title,
-                description,
-                issueYear,
-                authorIds,
-                catalogId,
-                now,
-                now
-        );
+                Id.generate(), isbn, title, description, issueYear, authorIds, catalogId, now, now);
     }
 
     public static Book restore(
@@ -102,19 +83,9 @@ public final class Book {
             List<Id<Author>> authorIds,
             Id<Catalog> catalogId,
             Instant createdAt,
-            Instant updatedAt
-    ) {
+            Instant updatedAt) {
         return new Book(
-                id,
-                isbn,
-                title,
-                description,
-                issueYear,
-                authorIds,
-                catalogId,
-                createdAt,
-                updatedAt
-        );
+                id, isbn, title, description, issueYear, authorIds, catalogId, createdAt, updatedAt);
     }
 
     public Book withAuthor(Id<Author> authorId) {
@@ -136,9 +107,6 @@ public final class Book {
                 updatedAuthorIds,
                 catalogId,
                 createdAt,
-                now.isAfter(updatedAt) ? now : updatedAt
-        );
+                now.isAfter(updatedAt) ? now : updatedAt);
     }
-
-
 }

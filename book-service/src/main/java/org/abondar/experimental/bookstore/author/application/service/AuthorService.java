@@ -1,12 +1,15 @@
 package org.abondar.experimental.bookstore.author.application.service;
 
 import lombok.RequiredArgsConstructor;
+import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
+import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
 import org.abondar.experimental.bookstore.author.application.port.in.DeleteAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorByIdUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorWithBooksByIdUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorsBySortNameUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.SaveAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.SaveAuthorWithBooksUseCase;
+import org.abondar.experimental.bookstore.author.application.port.in.UpdateAuthorCommand;
 import org.abondar.experimental.bookstore.author.application.port.in.UpdateAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorRepository;
 import org.abondar.experimental.bookstore.author.domain.Author;
@@ -17,14 +20,20 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class AuthorService implements SaveAuthorUseCase, SaveAuthorWithBooksUseCase,
-        UpdateAuthorUseCase, GetAuthorByIdUseCase, GetAuthorWithBooksByIdUseCase,
-        GetAuthorsBySortNameUseCase, DeleteAuthorUseCase {
+public class AuthorService
+        implements SaveAuthorUseCase,
+        SaveAuthorWithBooksUseCase,
+        UpdateAuthorUseCase,
+        GetAuthorByIdUseCase,
+        GetAuthorWithBooksByIdUseCase,
+        GetAuthorsBySortNameUseCase,
+        DeleteAuthorUseCase {
 
     private final AuthorRepository authorRepository;
 
@@ -33,7 +42,7 @@ public class AuthorService implements SaveAuthorUseCase, SaveAuthorWithBooksUseC
     @Override
     public void saveAuthor(Author author) {
         if (authorExists(author)) {
-            throw new IllegalArgumentException("Author already exists");
+            throw new AuthorAlreadyExistsException();
         }
 
         authorRepository.save(author);
@@ -41,22 +50,52 @@ public class AuthorService implements SaveAuthorUseCase, SaveAuthorWithBooksUseC
 
     @Override
     @Transactional
-    public void saveAuthorWithBooks(Author author, List<Book> books) {
+    public AuthorWithBooks saveAuthorWithBooks(Author author, List<Book> books) {
+        if (books == null || books.isEmpty()) {
+            throw new IllegalArgumentException("At least one book is required");
+        }
         if (authorExists(author)) {
-            throw new IllegalArgumentException("Author already exists");
+            throw new AuthorAlreadyExistsException();
         }
 
-        var booksWithAuthor = books.stream()
-                .map(book -> book.withAuthor(author.getId()))
-                .toList();
+        var booksWithAuthor =
+                books.stream().map(book -> prepareBookForAuthor(book).withAuthor(author.getId())).toList();
 
         authorRepository.save(author);
         bookRepository.saveMany(booksWithAuthor);
+        return new AuthorWithBooks(author, bookRepository.findByAuthor(author.getId()));
     }
 
     @Override
-    public void updateAuthor(Author author) {
-        authorRepository.update(author);
+    public Author updateAuthor(UpdateAuthorCommand authorCommand) {
+        var existing =
+                authorRepository
+                        .findById(authorCommand.id())
+                        .orElseThrow(() -> new AuthorNotFoundException(authorCommand.id()));
+
+        var now = Instant.now();
+
+        var updated =
+                Author.restore(
+                        authorCommand.id(),
+                        authorCommand.firstName() != null ? authorCommand.firstName() : existing.getFirstName(),
+                        authorCommand.lastName() != null ? authorCommand.lastName() : existing.getLastName(),
+                        authorCommand.sortName() != null ? authorCommand.sortName() : existing.getSortName(),
+                        authorCommand.dateOfBirth() != null
+                                ? authorCommand.dateOfBirth()
+                                : existing.getDateOfBirth(),
+                        authorCommand.dateOfDeath() != null
+                                ? authorCommand.dateOfDeath()
+                                : existing.getDateOfDeath(),
+                        authorCommand.countryCode() != null
+                                ? authorCommand.countryCode()
+                                : existing.getCountryCode(),
+                        authorCommand.biography() != null ? authorCommand.biography() : existing.getBiography(),
+                        existing.getCreatedAt(),
+                        now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
+
+        authorRepository.update(updated);
+        return updated;
     }
 
     @Override
@@ -92,4 +131,22 @@ public class AuthorService implements SaveAuthorUseCase, SaveAuthorWithBooksUseC
                 .isPresent();
     }
 
+    private Book prepareBookForAuthor(Book supplied) {
+        var existing = bookRepository.findById(supplied.getId());
+        if (existing.isEmpty()) {
+            return supplied;
+        }
+
+        var stored = existing.get();
+        return Book.restore(
+                supplied.getId(),
+                supplied.getIsbn(),
+                supplied.getTitle(),
+                supplied.getDescription() != null ? supplied.getDescription() : stored.getDescription(),
+                supplied.getIssueYear() != null ? supplied.getIssueYear() : stored.getIssueYear(),
+                supplied.getAuthorIds(),
+                supplied.getCatalogId() != null ? supplied.getCatalogId() : stored.getCatalogId(),
+                stored.getCreatedAt(),
+                stored.getUpdatedAt());
+    }
 }

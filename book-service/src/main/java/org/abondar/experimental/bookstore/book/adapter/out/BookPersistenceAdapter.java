@@ -26,7 +26,6 @@ import java.util.Set;
 import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.Tables.BOOK;
 import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.BookAuthor.BOOK_AUTHOR;
 
-
 @Repository
 @RequiredArgsConstructor
 public class BookPersistenceAdapter implements BookRepository {
@@ -35,30 +34,29 @@ public class BookPersistenceAdapter implements BookRepository {
 
     @Override
     public void save(Book book) {
-        var catalogId = book.getCatalogId() == null
-                ? null : book.getCatalogId().value();
-        var issueYear = book.getIssueYear() == null
-                ? null : book.getIssueYear().getValue();
+        var catalogId = book.getCatalogId() == null ? null : book.getCatalogId().value();
+        var issueYear = book.getIssueYear() == null ? null : book.getIssueYear().getValue();
         var createdAt = OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC);
         var updatedAt = OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC);
 
         try {
-            dslContext.transaction(configuration -> {
-                var tx = DSL.using(configuration);
+            dslContext.transaction(
+                    configuration -> {
+                        var tx = DSL.using(configuration);
 
-                tx.insertInto(BOOK)
-                        .set(BOOK.ID, book.getId().value())
-                        .set(BOOK.TITLE, book.getTitle().value())
-                        .set(BOOK.ISBN, book.getIsbn().value())
-                        .set(BOOK.DESCRIPTION, book.getDescription())
-                        .set(BOOK.CATALOG_ID, catalogId)
-                        .set(BOOK.ISSUE_YEAR, issueYear)
-                        .set(BOOK.CREATED_AT, createdAt)
-                        .set(BOOK.UPDATED_AT, updatedAt)
-                        .execute();
+                        tx.insertInto(BOOK)
+                                .set(BOOK.ID, book.getId().value())
+                                .set(BOOK.TITLE, book.getTitle().value())
+                                .set(BOOK.ISBN, book.getIsbn().value())
+                                .set(BOOK.DESCRIPTION, book.getDescription())
+                                .set(BOOK.CATALOG_ID, catalogId)
+                                .set(BOOK.ISSUE_YEAR, issueYear)
+                                .set(BOOK.CREATED_AT, createdAt)
+                                .set(BOOK.UPDATED_AT, updatedAt)
+                                .execute();
 
-                replaceAuthorLinks(tx, book);
-            });
+                        replaceAuthorLinks(tx, book);
+                    });
         } catch (DuplicateKeyException exception) {
             throw new BookAlreadyExistsException(book.getIsbn(), exception);
         }
@@ -67,15 +65,24 @@ public class BookPersistenceAdapter implements BookRepository {
     @Override
     public void update(Book book) {
         try {
-            boolean updated = dslContext.transactionResult(configuration -> {
+            boolean updated =
+                    dslContext.transactionResult(
+                            configuration -> {
                 var tx = DSL.using(configuration);
-                int affected = tx.update(BOOK)
+                                int affected =
+                                        tx.update(BOOK)
                         .set(BOOK.ISBN, book.getIsbn().value())
                         .set(BOOK.TITLE, book.getTitle().value())
                         .set(BOOK.DESCRIPTION, book.getDescription())
-                        .set(BOOK.ISSUE_YEAR, book.getIssueYear() == null ? null : book.getIssueYear().getValue())
-                        .set(BOOK.CATALOG_ID, book.getCatalogId() == null ? null : book.getCatalogId().value())
-                        .set(BOOK.UPDATED_AT, OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC))
+                                                .set(
+                                                        BOOK.ISSUE_YEAR,
+                                                        book.getIssueYear() == null ? null : book.getIssueYear().getValue())
+                                                .set(
+                                                        BOOK.CATALOG_ID,
+                                                        book.getCatalogId() == null ? null : book.getCatalogId().value())
+                                                .set(
+                                                        BOOK.UPDATED_AT,
+                                                        OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC))
                         .where(BOOK.ID.eq(book.getId().value()))
                         .execute();
                 if (affected == 0) {
@@ -84,7 +91,7 @@ public class BookPersistenceAdapter implements BookRepository {
 
                 replaceAuthorLinks(tx, book);
                 return true;
-            });
+                            });
             if (!updated) {
                 throw new BookNotFoundException(book.getId());
             }
@@ -94,9 +101,7 @@ public class BookPersistenceAdapter implements BookRepository {
     }
 
     private void replaceAuthorLinks(DSLContext tx, Book book) {
-        tx.deleteFrom(BOOK_AUTHOR)
-                .where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value()))
-                .execute();
+        tx.deleteFrom(BOOK_AUTHOR).where(BOOK_AUTHOR.BOOK_ID.eq(book.getId().value())).execute();
 
         for (int i = 0; i < book.getAuthorIds().size(); i++) {
             tx.insertInto(BOOK_AUTHOR)
@@ -113,17 +118,26 @@ public class BookPersistenceAdapter implements BookRepository {
             return;
         }
 
-        dslContext.transaction(configuration -> {
-            var tx = DSL.using(configuration);
-            upsertBooks(tx, books);
-            addAuthorLinks(tx, books);
+        dslContext.transaction(
+                configuration -> {
+                    var tx = DSL.using(configuration);
+                    upsertBooks(tx, books);
+                    addAuthorLinks(tx, books);
         });
     }
 
     private void upsertBooks(DSLContext tx, List<Book> books) {
-        var insert = tx.insertInto(BOOK,
-                BOOK.ID, BOOK.ISBN, BOOK.TITLE, BOOK.DESCRIPTION,
-                BOOK.CATALOG_ID, BOOK.ISSUE_YEAR, BOOK.CREATED_AT, BOOK.UPDATED_AT);
+        var insert =
+                tx.insertInto(
+                        BOOK,
+                        BOOK.ID,
+                        BOOK.ISBN,
+                        BOOK.TITLE,
+                        BOOK.DESCRIPTION,
+                        BOOK.CATALOG_ID,
+                        BOOK.ISSUE_YEAR,
+                        BOOK.CREATED_AT,
+                        BOOK.UPDATED_AT);
         for (var book : books) {
             insert.values(
                     book.getId().value(),
@@ -133,11 +147,11 @@ public class BookPersistenceAdapter implements BookRepository {
                     book.getCatalogId() == null ? null : book.getCatalogId().value(),
                     book.getIssueYear() == null ? null : book.getIssueYear().getValue(),
                     OffsetDateTime.ofInstant(book.getCreatedAt(), ZoneOffset.UTC),
-                    OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC)
-            );
+                    OffsetDateTime.ofInstant(book.getUpdatedAt(), ZoneOffset.UTC));
         }
 
-        insert.onConflict(BOOK.ID)
+        insert
+                .onConflict(BOOK.ID)
                 .doUpdate()
                 .set(BOOK.ISBN, DSL.excluded(BOOK.ISBN))
                 .set(BOOK.TITLE, DSL.excluded(BOOK.TITLE))
@@ -151,18 +165,21 @@ public class BookPersistenceAdapter implements BookRepository {
     private void addAuthorLinks(DSLContext tx, List<Book> books) {
         var bookIds = books.stream().map(book -> book.getId().value()).toList();
         var maxOrder = DSL.max(BOOK_AUTHOR.AUTHOR_ORDER).as("max_order");
-        var maxOrders = tx.select(BOOK_AUTHOR.BOOK_ID, maxOrder)
-                .from(BOOK_AUTHOR)
-                .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
-                .groupBy(BOOK_AUTHOR.BOOK_ID)
-                .fetchMap(BOOK_AUTHOR.BOOK_ID, maxOrder);
-        var linkedAuthors = tx.select(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
-                .from(BOOK_AUTHOR)
-                .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
-                .fetchGroups(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID);
+        var maxOrders =
+                tx.select(BOOK_AUTHOR.BOOK_ID, maxOrder)
+                        .from(BOOK_AUTHOR)
+                        .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
+                        .groupBy(BOOK_AUTHOR.BOOK_ID)
+                        .fetchMap(BOOK_AUTHOR.BOOK_ID, maxOrder);
+        var linkedAuthors =
+                tx.select(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
+                        .from(BOOK_AUTHOR)
+                        .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
+                        .fetchGroups(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID);
 
-        var insert = tx.insertInto(BOOK_AUTHOR,
-                BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID, BOOK_AUTHOR.AUTHOR_ORDER);
+        var insert =
+                tx.insertInto(
+                        BOOK_AUTHOR, BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID, BOOK_AUTHOR.AUTHOR_ORDER);
         int linkCount = 0;
         for (var book : books) {
             var bookId = book.getId().value();
@@ -177,15 +194,14 @@ public class BookPersistenceAdapter implements BookRepository {
             }
         }
         if (linkCount > 0) {
-            insert.onConflict(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
-                    .doNothing()
-                    .execute();
+            insert.onConflict(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID).doNothing().execute();
         }
     }
 
     @Override
     public Optional<Book> findById(Id<Book> id) {
-        return dslContext.selectFrom(BOOK)
+        return dslContext
+                .selectFrom(BOOK)
                 .where(BOOK.ID.eq(id.value()))
                 .fetchOptional()
                 .map(this::toBook);
@@ -193,7 +209,8 @@ public class BookPersistenceAdapter implements BookRepository {
 
     @Override
     public Optional<Book> findByIsbn(Isbn isbn) {
-        return dslContext.selectFrom(BOOK)
+        return dslContext
+                .selectFrom(BOOK)
                 .where(BOOK.ISBN.eq(isbn.value()))
                 .fetchOptional()
                 .map(this::toBook);
@@ -201,18 +218,20 @@ public class BookPersistenceAdapter implements BookRepository {
 
     @Override
     public List<Book> findByAuthor(Id<Author> authorId) {
-        return dslContext.select(BOOK.asterisk())
+        return dslContext
+                .select(BOOK.asterisk())
                 .from(BOOK)
-                .join(BOOK_AUTHOR).on(BOOK_AUTHOR.BOOK_ID.eq(BOOK.ID))
+                .join(BOOK_AUTHOR)
+                .on(BOOK_AUTHOR.BOOK_ID.eq(BOOK.ID))
                 .where(BOOK_AUTHOR.AUTHOR_ID.eq(authorId.value()))
                 .fetch()
                 .map(record -> toBook(record.into(BOOK)));
     }
 
-
     @Override
     public List<Book> findByCatalogId(Id<Catalog> catalogId) {
-        return dslContext.selectFrom(BOOK)
+        return dslContext
+                .selectFrom(BOOK)
                 .where(BOOK.CATALOG_ID.eq(catalogId.value()))
                 .fetch()
                 .map(this::toBook);
@@ -220,22 +239,20 @@ public class BookPersistenceAdapter implements BookRepository {
 
     @Override
     public void delete(Id<Book> id) {
-        dslContext.delete(BOOK)
-                .where(BOOK.ID.eq(id.value()))
-                .execute();
+        dslContext.delete(BOOK).where(BOOK.ID.eq(id.value())).execute();
     }
 
-
     private Book toBook(BookRecord record) {
-        var authorIds = dslContext.select(BOOK_AUTHOR.AUTHOR_ID)
-                .from(BOOK_AUTHOR)
-                .where(BOOK_AUTHOR.BOOK_ID.eq(record.getId()))
-                .orderBy(BOOK_AUTHOR.AUTHOR_ORDER.asc())
-                .fetch(BOOK_AUTHOR.AUTHOR_ID)
-                .stream()
-                .map(uuid -> new Id<Author>(uuid))
-                .toList();
-
+        var authorIds =
+                dslContext
+                        .select(BOOK_AUTHOR.AUTHOR_ID)
+                        .from(BOOK_AUTHOR)
+                        .where(BOOK_AUTHOR.BOOK_ID.eq(record.getId()))
+                        .orderBy(BOOK_AUTHOR.AUTHOR_ORDER.asc())
+                        .fetch(BOOK_AUTHOR.AUTHOR_ID)
+                        .stream()
+                        .map(uuid -> new Id<Author>(uuid))
+                        .toList();
 
         return Book.restore(
                 new Id<>(record.getId()),
@@ -246,7 +263,6 @@ public class BookPersistenceAdapter implements BookRepository {
                 authorIds,
                 record.getCatalogId() == null ? null : new Id<>(record.getCatalogId()),
                 record.getCreatedAt().toInstant(),
-                record.getUpdatedAt().toInstant()
-        );
+                record.getUpdatedAt().toInstant());
     }
 }

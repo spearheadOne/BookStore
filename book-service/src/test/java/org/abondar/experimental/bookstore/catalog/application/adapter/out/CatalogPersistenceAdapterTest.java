@@ -33,17 +33,17 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
                 () -> assertEquals(catalog.getName(), found.getName()),
                 () -> assertNotNull(found.getCreatedAt()),
                 () -> assertNotNull(found.getUpdatedAt()),
-                () -> assertEquals(catalog.getId(),
-                        adapter.findByName(catalog.getName().value()).orElseThrow().getId())
-        );
+                () ->
+                        assertEquals(
+                                catalog.getId(),
+                                adapter.findByName(catalog.getName().value()).orElseThrow().getId()));
     }
 
     @Test
     public void findMissingCatalog() {
         assertAll(
                 () -> assertTrue(adapter.findById(Id.generate()).isEmpty()),
-                () -> assertTrue(adapter.findByName("Missing catalog").isEmpty())
-        );
+                () -> assertTrue(adapter.findByName("Missing catalog").isEmpty()));
     }
 
     @Test
@@ -51,8 +51,12 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
         var catalog = Catalog.create(new Text("Before rename"));
         adapter.save(catalog);
         var originalCreatedAt = adapter.findById(catalog.getId()).orElseThrow().getCreatedAt();
-        var updated = Catalog.restore(catalog.getId(), new Text("After rename"),
-                catalog.getCreatedAt(), catalog.getUpdatedAt().plusSeconds(1));
+        var updated =
+                Catalog.restore(
+                        catalog.getId(),
+                        new Text("After rename"),
+                        catalog.getCreatedAt(),
+                        catalog.getUpdatedAt().plusSeconds(1));
 
         adapter.update(updated);
 
@@ -61,8 +65,7 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
                 () -> assertEquals(updated.getName(), found.getName()),
                 () -> assertEquals(originalCreatedAt, found.getCreatedAt()),
                 () -> assertTrue(found.getUpdatedAt().isAfter(originalCreatedAt)),
-                () -> assertTrue(adapter.findByName("Before rename").isEmpty())
-        );
+                () -> assertTrue(adapter.findByName("Before rename").isEmpty()));
     }
 
     @Test
@@ -99,7 +102,8 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
         var catalog = Catalog.create(new Text("Referenced catalog"));
         adapter.save(catalog);
         var bookId = Id.generate();
-        dslContext.insertInto(BOOK)
+        dslContext
+                .insertInto(BOOK)
                 .set(BOOK.ID, bookId.value())
                 .set(BOOK.ISBN, "catalog-delete-" + bookId.value())
                 .set(BOOK.TITLE, "Book in catalog")
@@ -110,7 +114,6 @@ public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
 
         assertAll(
                 () -> assertTrue(adapter.findById(catalog.getId()).isPresent()),
-                () -> assertEquals(1, dslContext.fetchCount(BOOK, BOOK.ID.eq(bookId.value())))
-        );
+                () -> assertEquals(1, dslContext.fetchCount(BOOK, BOOK.ID.eq(bookId.value()))));
     }
 }

@@ -47,10 +47,11 @@ paths:
                 $ref: '#/components/schemas/BookResponse'
         '404':
           description: Book not found
-    put:
+    patch:
       tags: [ Book ]
       operationId: updateBook
-      summary: Replace a book
+      summary: Update book fields
+      description: Omitted or null fields keep their existing values.
       requestBody:
         required: true
         content:
@@ -78,26 +79,224 @@ paths:
         '204':
           description: Book deleted
 
+  /api/v1/authors:
+    post:
+      tags: [ Author ]
+      operationId: registerAuthor
+      summary: Register an author
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterAuthorRequest'
+      responses:
+        '201':
+          description: Author registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorResponse'
+        '400':
+          description: Invalid author data
+        '409':
+          description: Author already exists
+    get:
+      tags: [ Author ]
+      operationId: getAuthorsBySortName
+      summary: Find authors by sort name
+      parameters:
+        - name: sortName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuthorResponse'
+        '400':
+          description: Missing sort name
+
+  /api/v1/authors/with-books:
+    post:
+      tags: [ Author ]
+      operationId: registerAuthorWithBooks
+      summary: Register an author with at least one book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterAuthorWithBooksRequest'
+      responses:
+        '201':
+          description: Author and books registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorWithBooksResponse'
+        '400':
+          description: Invalid author or book data, including an empty books array
+        '409':
+          description: Author or book already exists
+
+  /api/v1/authors/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [ Author ]
+      operationId: getAuthorById
+      summary: Get an author by ID
+      responses:
+        '200':
+          description: Author found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorResponse'
+        '404':
+          description: Author not found
+    patch:
+      tags: [ Author ]
+      operationId: updateAuthor
+      summary: Update an author
+      description: Omitted or null fields keep their existing values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAuthorRequest'
+      responses:
+        '200':
+          description: Author updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorResponse'
+        '400':
+          description: Invalid author data
+        '404':
+          description: Author not found
+        '409':
+          description: Author already exists
+    delete:
+      tags: [ Author ]
+      operationId: deleteAuthor
+      summary: Delete an author by ID
+      responses:
+        '204':
+          description: Author deleted
+
+  /api/v1/authors/{id}/books:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [ Author ]
+      operationId: getAuthorWithBooksById
+      summary: Get an author and their books
+      responses:
+        '200':
+          description: Author and books found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorWithBooksResponse'
+        '404':
+          description: Author not found
+
 components:
   schemas:
-    RegisterBookRequest:
+    RegisterAuthorRequest:
       type: object
+      required: [ firstName, lastName ]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+        lastName:
+          type: string
+          minLength: 1
+        sortName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        dateOfDeath:
+          type: string
+          format: date
+        countryCode:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        biography:
+          type: string
+
+    UpdateAuthorRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          nullable: true
+        lastName:
+          type: string
+          minLength: 1
+          nullable: true
+        sortName:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        dateOfDeath:
+          type: string
+          format: date
+          nullable: true
+        countryCode:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          nullable: true
+        biography:
+          type: string
+          nullable: true
+
+    RegisterAuthorWithBooksRequest:
+      type: object
+      required: [ author, books ]
+      properties:
+        author:
+          $ref: '#/components/schemas/RegisterAuthorRequest'
+        books:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BookInAuthorRegistration'
+
+    BookInAuthorRegistration:
+      type: object
+      description: Omit ID for a new book; supplying an ID inserts or updates that book.
       required: [ isbn, title ]
       properties:
-        isbn:
+        id:
           type: string
-        title:
-          type: string
-        description:
-          type: string
-        issueYear:
-          type: integer
-          format: int32
-
-    UpdateBookRequest:
-      type: object
-      required: [ isbn, title, authorIds ]
-      properties:
+          format: uuid
         isbn:
           type: string
         title:
@@ -116,6 +315,89 @@ components:
         catalogId:
           type: string
           format: uuid
+
+    AuthorResponse:
+      type: object
+      required: [ id, firstName, lastName, createdAt, updatedAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        sortName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        dateOfDeath:
+          type: string
+          format: date
+        countryCode:
+          type: string
+        biography:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AuthorWithBooksResponse:
+      type: object
+      required: [ author, books ]
+      properties:
+        author:
+          $ref: '#/components/schemas/AuthorResponse'
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookResponse'
+
+    RegisterBookRequest:
+      type: object
+      required: [ isbn, title ]
+      properties:
+        isbn:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        issueYear:
+          type: integer
+          format: int32
+
+    UpdateBookRequest:
+      type: object
+      properties:
+        isbn:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        issueYear:
+          type: integer
+          format: int32
+          nullable: true
+        authorIds:
+          type: array
+          uniqueItems: true
+          nullable: true
+          items:
+            type: string
+            format: uuid
+        catalogId:
+          type: string
+          format: uuid
+          nullable: true
 
     BookResponse:
       type: object

@@ -2,6 +2,7 @@ package org.abondar.experimental.bookstore.book.application.service;
 
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -9,16 +10,20 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Year;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -35,14 +40,7 @@ public class BookServiceTest {
 
     @Test
     public void registerBook() {
-        var book = Book.create(
-                new Isbn("0306406152"),
-                new Text("test"),
-                null,
-                null,
-                List.of(),
-                null
-        );
+        var book = Book.create(new Isbn("0306406152"), new Text("test"), null, null, List.of(), null);
 
         when(bookRepository.findByIsbn(book.getIsbn())).thenReturn(Optional.empty());
         bookService.registerBook(book);
@@ -52,19 +50,12 @@ public class BookServiceTest {
 
     @Test
     public void registerBookAlready() {
-        var book = Book.create(
-                new Isbn("0306406152"),
-                new Text("test"),
-                null,
-                null,
-                List.of(),
-                null
-        );
+        var book = Book.create(new Isbn("0306406152"), new Text("test"), null, null, List.of(), null);
 
         when(bookRepository.findByIsbn(book.getIsbn())).thenReturn(Optional.of(book));
 
-        var exception = assertThrows(BookAlreadyExistsException.class,
-                () -> bookService.registerBook(book));
+        var exception =
+                assertThrows(BookAlreadyExistsException.class, () -> bookService.registerBook(book));
 
         assertTrue(exception.getMessage().contains("already exists"));
         verify(bookRepository, never()).save(book);
@@ -72,14 +63,7 @@ public class BookServiceTest {
 
     @Test
     public void getBookTest() {
-        var book = Book.create(
-                new Isbn("0306406152"),
-                new Text("test"),
-                null,
-                null,
-                List.of(),
-                null
-        );
+        var book = Book.create(new Isbn("0306406152"), new Text("test"), null, null, List.of(), null);
 
         Id<Book> id = book.getId();
         when(bookRepository.findById(id)).thenReturn(Optional.of(book));
@@ -103,47 +87,68 @@ public class BookServiceTest {
 
     @Test
     public void updateBookWhenFound() {
-        var existingBook = Book.create(
-                new Isbn("0306406152"),
-                new Text("original title"),
-                null,
-                null,
-                List.of(),
-                null
-        );
-        var updatedBook = Book.restore(
-                existingBook.getId(),
-                existingBook.getIsbn(),
-                new Text("updated title"),
-                existingBook.getDescription(),
-                existingBook.getIssueYear(),
-                existingBook.getAuthorIds(),
-                existingBook.getCatalogId(),
-                existingBook.getCreatedAt(),
-                existingBook.getUpdatedAt().plusSeconds(1)
-        );
-        bookService.updateBook(updatedBook);
+        var existingBook =
+                Book.create(
+                        new Isbn("0306406152"),
+                        new Text("original title"),
+                        "Original description",
+                        Year.of(1980),
+                        List.of(),
+                        null);
+        var command =
+                new UpdateBookCommand(
+                        existingBook.getId(), null, new Text("updated title"), null, null, null, null);
+        when(bookRepository.findById(existingBook.getId())).thenReturn(Optional.of(existingBook));
 
-        verify(bookRepository).update(updatedBook);
+        var result = bookService.updateBook(command);
+        var captor = ArgumentCaptor.forClass(Book.class);
+        verify(bookRepository).update(captor.capture());
+
+        var updated = captor.getValue();
+        assertSame(updated, result);
+        assertEquals(existingBook.getId(), updated.getId());
+        assertEquals(existingBook.getIsbn(), updated.getIsbn());
+        assertEquals(new Text("updated title"), updated.getTitle());
+        assertEquals(existingBook.getDescription(), updated.getDescription());
+        assertEquals(existingBook.getIssueYear(), updated.getIssueYear());
+        assertEquals(existingBook.getAuthorIds(), updated.getAuthorIds());
+        assertEquals(existingBook.getCreatedAt(), updated.getCreatedAt());
+        assertTrue(!updated.getUpdatedAt().isBefore(existingBook.getUpdatedAt()));
     }
 
     @Test
     public void updateBookWhenNotFound() {
-        var book = Book.create(
-                new Isbn("0306406152"),
-                new Text("updated title"),
-                null,
-                null,
-                List.of(),
-                null
-        );
-        doThrow(new BookNotFoundException(book.getId())).when(bookRepository).update(book);
+        var book =
+                Book.create(new Isbn("0306406152"), new Text("updated title"), null, null, List.of(), null);
+        var command =
+                new UpdateBookCommand(
+                        book.getId(),
+                        book.getIsbn(),
+                        book.getTitle(),
+                        book.getDescription(),
+                        book.getIssueYear(),
+                        book.getAuthorIds(),
+                        book.getCatalogId());
+        when(bookRepository.findById(book.getId())).thenReturn(Optional.empty());
 
-        var exception = assertThrows(BookNotFoundException.class,
-                () -> bookService.updateBook(book));
+        var exception =
+                assertThrows(BookNotFoundException.class, () -> bookService.updateBook(command));
 
         assertTrue(exception.getMessage().contains("does not exist"));
-        verify(bookRepository).update(book);
+        verify(bookRepository, never()).update(any(Book.class));
+    }
+
+    @Test
+    public void updateBookDeletedAfterLookup() {
+        var book =
+                Book.create(new Isbn("0306406152"), new Text("Updated title"), null, null, List.of(), null);
+        var command =
+                new UpdateBookCommand(
+                        book.getId(), book.getIsbn(), book.getTitle(), null, null, List.of(), null);
+        when(bookRepository.findById(book.getId())).thenReturn(Optional.of(book));
+        doThrow(new BookNotFoundException(book.getId())).when(bookRepository).update(any(Book.class));
+
+        assertThrows(BookNotFoundException.class, () -> bookService.updateBook(command));
     }
 
     @Test
@@ -153,5 +158,4 @@ public class BookServiceTest {
 
         verify(bookRepository).delete(id);
     }
-
 }

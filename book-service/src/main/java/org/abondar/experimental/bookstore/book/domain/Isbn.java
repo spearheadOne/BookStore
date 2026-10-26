@@ -8,15 +8,12 @@ public record Isbn(String value) {
     public Isbn {
         Objects.requireNonNull(value, "ISBN must not be null");
 
-        value = value
-                .replaceAll("[\\s-]", "")
-                .toUpperCase(Locale.ROOT);
+        value = value.replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT);
 
         if (!isValid(value)) {
             throw new IllegalArgumentException("Invalid ISBN:" + value);
         }
     }
-
 
     private static boolean isValid(String value) {
         return switch (value.length()) {
@@ -34,9 +31,7 @@ public record Isbn(String value) {
         int sum = 0;
 
         for (int index = 0; index < 10; index++) {
-            int digit = value.charAt(index) == 'X'
-                    ? 10
-                    : Character.digit(value.charAt(index), 10);
+            int digit = value.charAt(index) == 'X' ? 10 : Character.digit(value.charAt(index), 10);
 
             sum += digit * (10 - index);
         }
@@ -58,6 +53,4 @@ public record Isbn(String value) {
 
         return sum % 10 == 0;
     }
-
-
 }
