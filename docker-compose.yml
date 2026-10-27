@@ -16,6 +16,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+  redis:
+    ports:
+      - "6379:6379"
+    image: redis:8-alpine
+    container_name: book-service-redis
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 
 volumes:
   book_store_postgres_data:

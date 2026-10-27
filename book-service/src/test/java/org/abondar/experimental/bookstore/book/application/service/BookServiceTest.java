@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Year;
@@ -16,6 +18,7 @@ import java.util.Optional;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
+import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -33,6 +36,8 @@ public class BookServiceTest {
 
   @Mock private BookRepository bookRepository;
 
+  @Mock private BookCacheRepository bookCacheRepository;
+
   @InjectMocks private BookService bookService;
 
   @Test
@@ -42,7 +47,9 @@ public class BookServiceTest {
     when(bookRepository.findByIsbn(book.getIsbn())).thenReturn(Optional.empty());
     bookService.registerBook(book);
 
-    verify(bookRepository).save(book);
+    var writes = inOrder(bookRepository, bookCacheRepository);
+    writes.verify(bookRepository).save(book);
+    writes.verify(bookCacheRepository).save(book);
   }
 
   @Test
@@ -56,10 +63,22 @@ public class BookServiceTest {
 
     assertTrue(exception.getMessage().contains("already exists"));
     verify(bookRepository, never()).save(book);
+    verifyNoInteractions(bookCacheRepository);
   }
 
   @Test
-  public void getBookTest() {
+  public void getBookFromCache() {
+    var book = Book.create(new Isbn("0306406152"), new Text("test"), null, null, List.of(), null);
+    when(bookCacheRepository.findById(book.getId())).thenReturn(Optional.of(book));
+
+    var result = bookService.getBook(book.getId());
+
+    assertSame(book, result.orElseThrow());
+    verify(bookRepository, never()).findById(book.getId());
+  }
+
+  @Test
+  public void getBookFromRepositoryPopulatesCache() {
     var book = Book.create(new Isbn("0306406152"), new Text("test"), null, null, List.of(), null);
 
     Id<Book> id = book.getId();
@@ -69,6 +88,7 @@ public class BookServiceTest {
 
     assertSame(book, result.orElseThrow());
     verify(bookRepository).findById(id);
+    verify(bookCacheRepository).save(book);
   }
 
   @Test
@@ -80,6 +100,7 @@ public class BookServiceTest {
 
     assertTrue(result.isEmpty());
     verify(bookRepository).findById(id);
+    verify(bookCacheRepository, never()).save(any(Book.class));
   }
 
   @Test
@@ -111,6 +132,9 @@ public class BookServiceTest {
     assertEquals(existingBook.getAuthorIds(), updated.getAuthorIds());
     assertEquals(existingBook.getCreatedAt(), updated.getCreatedAt());
     assertTrue(!updated.getUpdatedAt().isBefore(existingBook.getUpdatedAt()));
+    var writes = inOrder(bookRepository, bookCacheRepository);
+    writes.verify(bookRepository).update(updated);
+    writes.verify(bookCacheRepository).save(updated);
   }
 
   @Test
@@ -133,6 +157,7 @@ public class BookServiceTest {
 
     assertTrue(exception.getMessage().contains("does not exist"));
     verify(bookRepository, never()).update(any(Book.class));
+    verifyNoInteractions(bookCacheRepository);
   }
 
   @Test
@@ -146,6 +171,7 @@ public class BookServiceTest {
     doThrow(new BookNotFoundException(book.getId())).when(bookRepository).update(any(Book.class));
 
     assertThrows(BookNotFoundException.class, () -> bookService.updateBook(command));
+    verifyNoInteractions(bookCacheRepository);
   }
 
   @Test
@@ -153,6 +179,18 @@ public class BookServiceTest {
     Id<Book> id = Id.generate();
     bookService.deleteBook(id);
 
-    verify(bookRepository).delete(id);
+    var writes = inOrder(bookRepository, bookCacheRepository);
+    writes.verify(bookRepository).delete(id);
+    writes.verify(bookCacheRepository).delete(id);
+  }
+
+  @Test
+  public void deleteDoesNotEvictWhenRepositoryFails() {
+    Id<Book> id = Id.generate();
+    doThrow(new BookNotFoundException(id)).when(bookRepository).delete(id);
+
+    assertThrows(BookNotFoundException.class, () -> bookService.deleteBook(id));
+
+    verify(bookCacheRepository, never()).delete(id);
   }
 }

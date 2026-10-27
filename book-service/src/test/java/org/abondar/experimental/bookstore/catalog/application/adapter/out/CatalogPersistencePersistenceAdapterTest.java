@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.abondar.experimental.bookstore.BaseAdapterTest;
+import org.abondar.experimental.bookstore.BasePersistenceAdapterTest;
 import org.abondar.experimental.bookstore.catalog.adapter.out.CatalogPersistenceAdapter;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 
-public class CatalogPersistenceAdapterTest extends BaseAdapterTest {
+public class CatalogPersistencePersistenceAdapterTest extends BasePersistenceAdapterTest {
 
   @Autowired private CatalogPersistenceAdapter adapter;
 

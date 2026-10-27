@@ -14,7 +14,14 @@ spring:
       keepalive-time: 300000
   jooq:
     sql-dialect: postgres
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 server:
   port: ${SERVER_PORT:8080}
 
+book:
+  cache:
+    ttl: ${BOOK_CACHE_TTL:30s}

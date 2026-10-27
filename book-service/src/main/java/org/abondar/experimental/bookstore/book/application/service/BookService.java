@@ -10,6 +10,7 @@ import org.abondar.experimental.bookstore.book.application.port.in.GetBookUseCas
 import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
@@ -21,6 +22,7 @@ public class BookService
     implements RegisterBookUseCase, GetBookUseCase, UpdateBookUseCase, DeleteBookUseCase {
 
   private final BookRepository bookRepository;
+  private final BookCacheRepository bookCacheRepository;
 
   @Override
   public void registerBook(Book book) {
@@ -28,6 +30,7 @@ public class BookService
 
     if (!exists) {
       bookRepository.save(book);
+      bookCacheRepository.save(book);
     } else {
       throw new BookAlreadyExistsException(book.getIsbn());
     }
@@ -35,7 +38,13 @@ public class BookService
 
   @Override
   public Optional<Book> getBook(Id<Book> id) {
-    return bookRepository.findById(id);
+    var book = bookCacheRepository.findById(id);
+    if (book.isPresent()) {
+      return book;
+    }
+    book = bookRepository.findById(id);
+    book.ifPresent(bookCacheRepository::save);
+    return book;
   }
 
   @Override
@@ -58,11 +67,13 @@ public class BookService
             now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
 
     bookRepository.update(updated);
+    bookCacheRepository.save(updated);
     return updated;
   }
 
   @Override
   public void deleteBook(Id<Book> id) {
     bookRepository.delete(id);
+    bookCacheRepository.delete(id);
   }
 }

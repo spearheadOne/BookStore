@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Year;
 import java.util.List;
 import java.util.Set;
-import org.abondar.experimental.bookstore.BaseAdapterTest;
+import org.abondar.experimental.bookstore.BasePersistenceAdapterTest;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.adapter.out.BookPersistenceAdapter;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 
-public class BookPersistenceAdapterTest extends BaseAdapterTest {
+public class BookPersistencePersistenceAdapterTest extends BasePersistenceAdapterTest {
 
   @Autowired private BookPersistenceAdapter adapter;
 

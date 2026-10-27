@@ -12,8 +12,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
-@Import(BaseAdapterTest.PostgresConfig.class)
-public class BaseAdapterTest {
+@Import(BasePersistenceAdapterTest.PostgresConfig.class)
+public abstract class BasePersistenceAdapterTest {
 
   @Autowired protected DSLContext dslContext;
 

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.util.List;
-import org.abondar.experimental.bookstore.BaseAdapterTest;
+import org.abondar.experimental.bookstore.BasePersistenceAdapterTest;
 import org.abondar.experimental.bookstore.author.adapter.out.AuthorPersistenceAdapter;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
 import org.abondar.experimental.bookstore.author.domain.Author;
@@ -21,7 +21,7 @@ import org.abondar.experimental.bookstore.common.Text;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-public class AuthorPersistenceAdapterTest extends BaseAdapterTest {
+public class AuthorPersistencePersistenceAdapterTest extends BasePersistenceAdapterTest {
 
   @Autowired private AuthorPersistenceAdapter adapter;
 
