@@ -19,7 +19,7 @@ services:
   redis:
     ports:
       - "6379:6379"
-    image: redis:8-alpine
+    image: redis:8.4-alpine
     container_name: book-service-redis
     restart: unless-stopped
     healthcheck:

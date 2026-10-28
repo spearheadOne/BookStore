@@ -1,6 +1,8 @@
 package org.abondar.experimental.bookstore.book.adapter.out;
 
-import java.time.Duration;
+import io.lettuce.core.codec.ByteArrayCodec;
+import io.lettuce.core.output.IntegerOutput;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.Year;
 import java.util.ArrayList;
@@ -12,29 +14,23 @@ import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
+import org.abondar.experimental.bookstore.common.BaseCacheRepository;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
-import org.springframework.beans.factory.annotation.Value;
+import org.abondar.experimental.bookstore.config.CacheProperties;
+import org.springframework.data.redis.connection.lettuce.LettuceConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.json.JsonMapper;
 
 @Repository
-public class BookCacheRedisAdapter implements BookCacheRepository {
+public class BookCacheRedisAdapter extends BaseCacheRepository implements BookCacheRepository {
 
   private static final String KEY_PREFIX = "book:v1:";
 
-  private final StringRedisTemplate redisTemplate;
-  private final JsonMapper jsonMapper;
-  private final Duration ttl;
-
   public BookCacheRedisAdapter(
-      StringRedisTemplate redisTemplate,
-      JsonMapper jsonMapper,
-      @Value("${book.cache.ttl}") Duration ttl) {
-    this.redisTemplate = redisTemplate;
-    this.jsonMapper = jsonMapper;
-    this.ttl = ttl;
+      StringRedisTemplate redisTemplate, JsonMapper jsonMapper, CacheProperties cacheProperties) {
+    super(redisTemplate, jsonMapper, cacheProperties);
   }
 
   private String key(Id<Book> id) {
@@ -45,18 +41,49 @@ public class BookCacheRedisAdapter implements BookCacheRepository {
   public void save(Book book) {
     redisTemplate
         .opsForValue()
-        .set(key(book.getId()), jsonMapper.writeValueAsString(toCachedBook(book)), ttl);
+        .set(
+            key(book.getId()),
+            jsonMapper.writeValueAsString(toCachedBook(book)),
+            cacheProperties.bookTtl());
   }
 
   @Override
   public void saveMany(List<Book> books) {
+    if (books.isEmpty()) {
+      return;
+    }
+
     var cachedBooks = new HashMap<String, String>();
     for (Book b : books) {
       var cached = toCachedBook(b);
       cachedBooks.put(key(b.getId()), jsonMapper.writeValueAsString(cached));
     }
 
-    redisTemplate.opsForValue().multiSet(cachedBooks);
+    var arguments = new ArrayList<byte[]>();
+    arguments.add(Integer.toString(cachedBooks.size()).getBytes(StandardCharsets.UTF_8));
+    cachedBooks.forEach(
+        (bookKey, value) -> {
+          arguments.add(bookKey.getBytes(StandardCharsets.UTF_8));
+          arguments.add(value.getBytes(StandardCharsets.UTF_8));
+        });
+    arguments.add("PX".getBytes(StandardCharsets.UTF_8));
+    arguments.add(
+        Long.toString(cacheProperties.bookTtl().toMillis()).getBytes(StandardCharsets.UTF_8));
+
+    var result =
+        redisTemplate.execute(
+            connection -> {
+              var lettuceConnection = (LettuceConnection) connection;
+              return (Long)
+                  lettuceConnection.execute(
+                      "MSETEX",
+                      new IntegerOutput<>(ByteArrayCodec.INSTANCE),
+                      arguments.toArray(byte[][]::new));
+            },
+            true);
+    if (!Long.valueOf(1).equals(result)) {
+      throw new IllegalStateException("Redis did not cache all books");
+    }
   }
 
   @Override

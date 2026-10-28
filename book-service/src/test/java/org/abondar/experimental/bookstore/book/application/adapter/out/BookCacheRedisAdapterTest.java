@@ -100,6 +100,15 @@ class BookCacheRedisAdapterTest extends BaseRedisAdapterTest {
 
     assertEquals(updated.getTitle(), adapter.findById(first.getId()).orElseThrow().getTitle());
     assertEquals(second.getTitle(), adapter.findById(second.getId()).orElseThrow().getTitle());
+    var firstTtl = redisTemplate.getExpire("book:v1:" + first.getId().value());
+    var secondTtl = redisTemplate.getExpire("book:v1:" + second.getId().value());
+    assertTrue(firstTtl != null && firstTtl > 0 && firstTtl <= 30);
+    assertTrue(secondTtl != null && secondTtl > 0 && secondTtl <= 30);
+  }
+
+  @Test
+  void saveManyAcceptsNoBooks() {
+    adapter.saveMany(List.of());
   }
 
   @Test

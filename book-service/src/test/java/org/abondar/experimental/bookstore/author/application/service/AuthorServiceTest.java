@@ -18,20 +18,26 @@ import java.util.Optional;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
 import org.abondar.experimental.bookstore.author.application.port.in.UpdateAuthorCommand;
+import org.abondar.experimental.bookstore.author.application.port.out.AuthorCacheRepository;
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorRepository;
 import org.abondar.experimental.bookstore.author.domain.Author;
+import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 public class AuthorServiceTest {
@@ -40,7 +46,23 @@ public class AuthorServiceTest {
 
   @Mock private BookRepository bookRepository;
 
+  @Mock private AuthorCacheRepository authorCacheRepository;
+
+  @Mock private BookCacheRepository bookCacheRepository;
+
   @InjectMocks private AuthorService authorService;
+
+  @BeforeEach
+  void beginTransactionSynchronization() {
+    TransactionSynchronizationManager.initSynchronization();
+    TransactionSynchronizationManager.setActualTransactionActive(true);
+  }
+
+  @AfterEach
+  void endTransactionSynchronization() {
+    TransactionSynchronizationManager.clearSynchronization();
+    TransactionSynchronizationManager.setActualTransactionActive(false);
+  }
 
   @Test
   public void saveAuthor() {
@@ -52,6 +74,7 @@ public class AuthorServiceTest {
     authorService.saveAuthor(author);
 
     verify(authorRepository).save(author);
+    verify(authorCacheRepository).save(author);
   }
 
   @Test
@@ -64,6 +87,7 @@ public class AuthorServiceTest {
     assertThrows(AuthorAlreadyExistsException.class, () -> authorService.saveAuthor(author));
 
     verify(authorRepository, never()).save(author);
+    verifyNoInteractions(authorCacheRepository);
   }
 
   @Test
@@ -89,11 +113,15 @@ public class AuthorServiceTest {
         .thenReturn(List.of(firstSavedBook, secondSavedBook));
 
     var result = authorService.saveAuthorWithBooks(author, List.of(firstBook, secondBook));
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(TransactionSynchronization::afterCommit);
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<Book>> booksCaptor = ArgumentCaptor.forClass(List.class);
     verify(authorRepository).save(author);
     verify(bookRepository).saveMany(booksCaptor.capture());
+    verify(bookCacheRepository).deleteByIds(List.of(firstBook.getId(), secondBook.getId()));
+    verify(bookCacheRepository).saveMany(booksCaptor.getValue());
     var savedBooks = booksCaptor.getValue();
     assertAll(
         () -> assertEquals(List.of(), firstBook.getAuthorIds()),
@@ -106,6 +134,74 @@ public class AuthorServiceTest {
         () -> assertEquals(secondBook.getId(), savedBooks.get(1).getId()));
     assertSame(author, result.author());
     assertEquals(List.of(firstSavedBook, secondSavedBook), result.books());
+  }
+
+  @Test
+  public void saveAuthorWithBooksUpdatesCacheAfterCommit() {
+    var author = author();
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(), null);
+    when(bookRepository.findByAuthor(author.getId()))
+        .thenReturn(List.of(book.withAuthor(author.getId())));
+
+    authorService.saveAuthorWithBooks(author, List.of(book));
+
+    verifyNoInteractions(authorCacheRepository, bookCacheRepository);
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(TransactionSynchronization::afterCommit);
+
+    verify(authorCacheRepository).save(author);
+    verify(bookCacheRepository).deleteByIds(List.of(book.getId()));
+    verify(bookCacheRepository).saveMany(List.of(book.withAuthor(author.getId())));
+  }
+
+  @Test
+  public void saveAuthorWithBooksCachesPersistedAuthorLinks() {
+    var author = author();
+    var existingAuthorId = Id.<Author>generate();
+    var stored =
+        Book.create(
+            new Isbn("0306406152"), new Text("Book"), null, null, List.of(existingAuthorId), null);
+    var supplied =
+        Book.restore(
+            stored.getId(),
+            stored.getIsbn(),
+            stored.getTitle(),
+            null,
+            null,
+            List.of(),
+            null,
+            stored.getCreatedAt(),
+            stored.getUpdatedAt());
+    when(bookRepository.findById(stored.getId())).thenReturn(Optional.of(stored));
+    when(bookRepository.findByAuthor(author.getId()))
+        .thenReturn(List.of(stored.withAuthor(author.getId())));
+
+    authorService.saveAuthorWithBooks(author, List.of(supplied));
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(TransactionSynchronization::afterCommit);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<Book>> cachedBooks = ArgumentCaptor.forClass(List.class);
+    verify(bookCacheRepository).saveMany(cachedBooks.capture());
+    assertEquals(
+        List.of(existingAuthorId, author.getId()),
+        cachedBooks.getValue().getFirst().getAuthorIds());
+  }
+
+  @Test
+  public void saveAuthorWithBooksDoesNotUpdateCacheOnRollback() {
+    var author = author();
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(), null);
+
+    authorService.saveAuthorWithBooks(author, List.of(book));
+
+    verifyNoInteractions(authorCacheRepository, bookCacheRepository);
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(
+            synchronization ->
+                synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+    verifyNoInteractions(authorCacheRepository, bookCacheRepository);
   }
 
   @Test
@@ -188,6 +284,7 @@ public class AuthorServiceTest {
     verify(authorRepository).update(captor.capture());
     var updated = captor.getValue();
     assertSame(updated, result);
+    verify(authorCacheRepository).save(updated);
     assertEquals(new Text("Augusta"), updated.getFirstName());
     assertEquals(author.getLastName(), updated.getLastName());
     assertEquals(author.getSortName(), updated.getSortName());
@@ -216,6 +313,18 @@ public class AuthorServiceTest {
     var result = authorService.getAuthorById(author.getId());
 
     assertSame(author, result.orElseThrow());
+    verify(authorCacheRepository).save(author);
+  }
+
+  @Test
+  public void getAuthorByIdFromCache() {
+    var author = author();
+    when(authorCacheRepository.findById(author.getId())).thenReturn(Optional.of(author));
+
+    var result = authorService.getAuthorById(author.getId());
+
+    assertSame(author, result.orElseThrow());
+    verifyNoInteractions(authorRepository);
   }
 
   @Test
@@ -226,6 +335,7 @@ public class AuthorServiceTest {
     var result = authorService.getAuthorById(id);
 
     assertTrue(result.isEmpty());
+    verify(authorCacheRepository, never()).save(any(Author.class));
   }
 
   @Test
@@ -268,10 +378,14 @@ public class AuthorServiceTest {
   @Test
   public void deleteAuthor() {
     Id<Author> id = Id.generate();
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(id), null);
+    when(bookRepository.findByAuthor(id)).thenReturn(List.of(book));
 
     authorService.deleteAuthor(id);
 
     verify(authorRepository).delete(id);
+    verify(authorCacheRepository).delete(id);
+    verify(bookCacheRepository).deleteByIds(List.of(book.getId()));
   }
 
   private Author author() {

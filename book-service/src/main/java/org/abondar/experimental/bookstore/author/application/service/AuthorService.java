@@ -14,14 +14,18 @@ import org.abondar.experimental.bookstore.author.application.port.in.SaveAuthorU
 import org.abondar.experimental.bookstore.author.application.port.in.SaveAuthorWithBooksUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.UpdateAuthorCommand;
 import org.abondar.experimental.bookstore.author.application.port.in.UpdateAuthorUseCase;
+import org.abondar.experimental.bookstore.author.application.port.out.AuthorCacheRepository;
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorRepository;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.author.domain.AuthorWithBooks;
+import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +42,10 @@ public class AuthorService
 
   private final BookRepository bookRepository;
 
+  private final AuthorCacheRepository authorCacheRepository;
+
+  private final BookCacheRepository bookCacheRepository;
+
   @Override
   public void saveAuthor(Author author) {
     if (authorExists(author)) {
@@ -45,6 +53,7 @@ public class AuthorService
     }
 
     authorRepository.save(author);
+    authorCacheRepository.save(author);
   }
 
   @Override
@@ -62,7 +71,20 @@ public class AuthorService
 
     authorRepository.save(author);
     bookRepository.saveMany(booksWithAuthor);
-    return new AuthorWithBooks(author, bookRepository.findByAuthor(author.getId()));
+
+    var savedBooks = bookRepository.findByAuthor(author.getId());
+    var bookIds = savedBooks.stream().map(Book::getId).toList();
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            authorCacheRepository.save(author);
+            bookCacheRepository.deleteByIds(bookIds);
+            bookCacheRepository.saveMany(savedBooks);
+          }
+        });
+
+    return new AuthorWithBooks(author, savedBooks);
   }
 
   @Override
@@ -94,12 +116,21 @@ public class AuthorService
             now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
 
     authorRepository.update(updated);
+    authorCacheRepository.save(updated);
     return updated;
   }
 
   @Override
   public Optional<Author> getAuthorById(Id<Author> id) {
-    return authorRepository.findById(id);
+    var author = authorCacheRepository.findById(id);
+    if (author.isPresent()) {
+      return author;
+    }
+
+    author = authorRepository.findById(id);
+    author.ifPresent(authorCacheRepository::save);
+
+    return author;
   }
 
   @Override
@@ -121,7 +152,10 @@ public class AuthorService
 
   @Override
   public void deleteAuthor(Id<Author> id) {
+    var bookIds = bookRepository.findByAuthor(id).stream().map(Book::getId).toList();
     authorRepository.delete(id);
+    authorCacheRepository.delete(id);
+    bookCacheRepository.deleteByIds(bookIds);
   }
 
   private boolean authorExists(Author author) {
