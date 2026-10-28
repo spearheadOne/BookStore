@@ -79,6 +79,44 @@ class BookCacheRedisAdapterTest extends BaseRedisAdapterTest {
   }
 
   @Test
+  void saveManyStoresAndReplacesBooks() {
+    var first = Book.create(new Isbn("0306406152"), new Text("Old"), null, null, List.of(), null);
+    var updated =
+        Book.restore(
+            first.getId(),
+            first.getIsbn(),
+            new Text("New"),
+            null,
+            null,
+            List.of(),
+            null,
+            first.getCreatedAt(),
+            first.getUpdatedAt());
+    var second =
+        Book.create(new Isbn("9780134685991"), new Text("Second"), null, null, List.of(), null);
+    adapter.save(first);
+
+    adapter.saveMany(List.of(updated, second));
+
+    assertEquals(updated.getTitle(), adapter.findById(first.getId()).orElseThrow().getTitle());
+    assertEquals(second.getTitle(), adapter.findById(second.getId()).orElseThrow().getTitle());
+  }
+
+  @Test
+  void findByIdsPreservesOrderAndSkipsMissingBooks() {
+    var first = Book.create(new Isbn("0306406152"), new Text("First"), null, null, List.of(), null);
+    var second =
+        Book.create(new Isbn("9780134685991"), new Text("Second"), null, null, List.of(), null);
+    adapter.save(first);
+    adapter.save(second);
+
+    var found = adapter.findByIds(List.of(second.getId(), Id.generate(), first.getId()));
+
+    assertEquals(List.of(second.getId(), first.getId()), found.stream().map(Book::getId).toList());
+    assertTrue(adapter.findByIds(List.of()).isEmpty());
+  }
+
+  @Test
   void deleteBook() {
     var book = Book.create(new Isbn("0306406152"), new Text("A book"), null, null, List.of(), null);
     adapter.save(book);
@@ -87,5 +125,23 @@ class BookCacheRedisAdapterTest extends BaseRedisAdapterTest {
 
     assertFalse(redisTemplate.hasKey("book:v1:" + book.getId().value()));
     assertTrue(adapter.findById(book.getId()).isEmpty());
+  }
+
+  @Test
+  void deleteByIdsRemovesOnlyRequestedBooks() {
+    var first = Book.create(new Isbn("0306406152"), new Text("First"), null, null, List.of(), null);
+    var second =
+        Book.create(new Isbn("9780134685991"), new Text("Second"), null, null, List.of(), null);
+    var retained =
+        Book.create(new Isbn("9780201633610"), new Text("Retained"), null, null, List.of(), null);
+    adapter.saveMany(List.of(first, second, retained));
+
+    adapter.deleteByIds(List.of(first.getId(), second.getId()));
+
+    assertTrue(adapter.findById(first.getId()).isEmpty());
+    assertTrue(adapter.findById(second.getId()).isEmpty());
+    assertEquals(retained.getId(), adapter.findById(retained.getId()).orElseThrow().getId());
+    adapter.deleteByIds(List.of());
+    assertTrue(adapter.findById(retained.getId()).isPresent());
   }
 }

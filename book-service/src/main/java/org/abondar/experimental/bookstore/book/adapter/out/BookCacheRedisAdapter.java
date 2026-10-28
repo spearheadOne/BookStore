@@ -3,6 +3,8 @@ package org.abondar.experimental.bookstore.book.adapter.out;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.Year;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,7 +12,6 @@ import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
-import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,23 +37,26 @@ public class BookCacheRedisAdapter implements BookCacheRepository {
     this.ttl = ttl;
   }
 
-  private static String key(Id<Book> id) {
+  private String key(Id<Book> id) {
     return KEY_PREFIX + id.value();
   }
 
   @Override
   public void save(Book book) {
-    var cached =
-        new CachedBook(
-            book.getIsbn().value(),
-            book.getTitle().value(),
-            book.getDescription(),
-            book.getIssueYear() == null ? null : book.getIssueYear().getValue(),
-            book.getAuthorIds().stream().map(Id::value).toList(),
-            book.getCatalogId() == null ? null : book.getCatalogId().value(),
-            book.getCreatedAt(),
-            book.getUpdatedAt());
-    redisTemplate.opsForValue().set(key(book.getId()), jsonMapper.writeValueAsString(cached), ttl);
+    redisTemplate
+        .opsForValue()
+        .set(key(book.getId()), jsonMapper.writeValueAsString(toCachedBook(book)), ttl);
+  }
+
+  @Override
+  public void saveMany(List<Book> books) {
+    var cachedBooks = new HashMap<String, String>();
+    for (Book b : books) {
+      var cached = toCachedBook(b);
+      cachedBooks.put(key(b.getId()), jsonMapper.writeValueAsString(cached));
+    }
+
+    redisTemplate.opsForValue().multiSet(cachedBooks);
   }
 
   @Override
@@ -62,22 +66,60 @@ public class BookCacheRedisAdapter implements BookCacheRepository {
       return Optional.empty();
     }
     var cached = jsonMapper.readValue(value, CachedBook.class);
-    return Optional.of(
-        Book.restore(
-            id,
-            new Isbn(cached.isbn()),
-            new Text(cached.title()),
-            cached.description(),
-            cached.issueYear() == null ? null : Year.of(cached.issueYear()),
-            cached.authorIds().stream().map(authorId -> new Id<Author>(authorId)).toList(),
-            cached.catalogId() == null ? null : new Id<Catalog>(cached.catalogId()),
-            cached.createdAt(),
-            cached.updatedAt()));
+    return Optional.of(toBook(id, cached));
+  }
+
+  @Override
+  public List<Book> findByIds(List<Id<Book>> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    var rawBooks = redisTemplate.opsForValue().multiGet(ids.stream().map(this::key).toList());
+    var books = new ArrayList<Book>();
+    for (int index = 0; index < ids.size(); index++) {
+      var rawBook = rawBooks.get(index);
+      if (rawBook != null) {
+        books.add(toBook(ids.get(index), jsonMapper.readValue(rawBook, CachedBook.class)));
+      }
+    }
+    return books;
   }
 
   @Override
   public void delete(Id<Book> id) {
     redisTemplate.delete(key(id));
+  }
+
+  @Override
+  public void deleteByIds(List<Id<Book>> ids) {
+    if (!ids.isEmpty()) {
+      redisTemplate.delete(ids.stream().map(this::key).toList());
+    }
+  }
+
+  private CachedBook toCachedBook(Book book) {
+    return new CachedBook(
+        book.getIsbn().value(),
+        book.getTitle().value(),
+        book.getDescription(),
+        book.getIssueYear() == null ? null : book.getIssueYear().getValue(),
+        book.getAuthorIds().stream().map(Id::value).toList(),
+        book.getCatalogId() == null ? null : book.getCatalogId().value(),
+        book.getCreatedAt(),
+        book.getUpdatedAt());
+  }
+
+  private Book toBook(Id<Book> id, CachedBook cachedBook) {
+    return Book.restore(
+        id,
+        new Isbn(cachedBook.isbn()),
+        new Text(cachedBook.title()),
+        cachedBook.description(),
+        cachedBook.issueYear() == null ? null : Year.of(cachedBook.issueYear()),
+        cachedBook.authorIds().stream().map(rawId -> new Id<Author>(rawId)).toList(),
+        cachedBook.catalogId() == null ? null : new Id<>(cachedBook.catalogId()),
+        cachedBook.createdAt(),
+        cachedBook.updatedAt());
   }
 
   private record CachedBook(
