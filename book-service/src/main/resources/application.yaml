@@ -19,6 +19,21 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          show-details: always
+      show-details: always
+      status:
+        order: DOWN,OUT_OF_SERVICE,UP
+  server:
+    port: 8001
+
 server:
   port: ${SERVER_PORT:8080}
 
