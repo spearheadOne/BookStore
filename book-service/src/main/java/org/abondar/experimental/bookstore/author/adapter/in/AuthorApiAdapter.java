@@ -7,12 +7,15 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.adapter.in.ResponseMapper;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.api.AuthorApi;
+import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.AddBooksToAuthorRequest;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.AuthorResponse;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.AuthorWithBooksResponse;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.BookInAuthorRegistration;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.RegisterAuthorRequest;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.RegisterAuthorWithBooksRequest;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.UpdateAuthorRequest;
+import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorCommand;
+import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.DeleteAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorByIdUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorWithBooksByIdUseCase;
@@ -35,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthorApiAdapter implements AuthorApi {
 
   private final SaveAuthorUseCase saveAuthorUseCase;
+  private final AddBooksToAuthorUseCase addBooksToAuthorUseCase;
   private final SaveAuthorWithBooksUseCase saveAuthorWithBooksUseCase;
   private final UpdateAuthorUseCase updateAuthorUseCase;
   private final GetAuthorByIdUseCase getAuthorByIdUseCase;
@@ -62,6 +66,26 @@ public class AuthorApiAdapter implements AuthorApi {
             authorWithBooks ->
                 ResponseEntity.ok(ResponseMapper.toAuthorWithBooksResponse(authorWithBooks)))
         .orElseGet(() -> ResponseEntity.status(404).build());
+  }
+
+  @Override
+  public ResponseEntity<AuthorWithBooksResponse> addBooksToAuthor(
+      UUID id, AddBooksToAuthorRequest request) {
+    if (request == null) {
+      throw new IllegalArgumentException("Books request is required");
+    }
+    var bookIds =
+        request.getBookIds() == null
+            ? List.<Id<Book>>of()
+            : request.getBookIds().stream().map(bookId -> new Id<Book>(bookId)).toList();
+    if (bookIds.isEmpty()) {
+      throw new IllegalArgumentException("At least one book is required");
+    }
+
+    var result =
+        addBooksToAuthorUseCase.addBooksToAuthor(
+            new AddBooksToAuthorCommand(new Id<>(id), bookIds));
+    return ResponseEntity.ok(ResponseMapper.toAuthorWithBooksResponse(result));
   }
 
   @Override

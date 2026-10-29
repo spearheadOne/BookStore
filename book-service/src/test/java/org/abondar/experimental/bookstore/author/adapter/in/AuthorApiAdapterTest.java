@@ -18,6 +18,8 @@ import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.AuthorWithBooksResponse;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
+import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorCommand;
+import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.DeleteAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorByIdUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorWithBooksByIdUseCase;
@@ -29,6 +31,7 @@ import org.abondar.experimental.bookstore.author.application.port.in.UpdateAutho
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.author.domain.AuthorWithBooks;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.common.Id;
@@ -47,6 +50,7 @@ import org.springframework.test.web.servlet.client.RestTestClient;
 class AuthorApiAdapterTest {
 
   @Mock private SaveAuthorUseCase saveAuthorUseCase;
+  @Mock private AddBooksToAuthorUseCase addBooksToAuthorUseCase;
   @Mock private SaveAuthorWithBooksUseCase saveAuthorWithBooksUseCase;
   @Mock private UpdateAuthorUseCase updateAuthorUseCase;
   @Mock private GetAuthorByIdUseCase getAuthorByIdUseCase;
@@ -62,6 +66,7 @@ class AuthorApiAdapterTest {
         RestTestClient.bindToController(
                 new AuthorApiAdapter(
                     saveAuthorUseCase,
+                    addBooksToAuthorUseCase,
                     saveAuthorWithBooksUseCase,
                     updateAuthorUseCase,
                     getAuthorByIdUseCase,
@@ -270,6 +275,69 @@ class AuthorApiAdapterTest {
     assertNotNull(response);
     assertEquals(existingBookId, response.getBooks().getFirst().getId());
     assertEquals(2, response.getBooks().getFirst().getAuthorIds().size());
+  }
+
+  @Test
+  void addExistingBooksToAuthor() {
+    var author = author();
+    var existingBookId = UUID.randomUUID();
+    when(addBooksToAuthorUseCase.addBooksToAuthor(any(AddBooksToAuthorCommand.class)))
+        .thenReturn(new AuthorWithBooks(author, List.of()));
+
+    var response =
+        client
+            .post()
+            .uri("/api/v1/authors/{id}/books", author.getId().value())
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(
+                """
+                {"bookIds":["%s"]}
+                """
+                    .formatted(existingBookId))
+            .exchange()
+            .expectStatus()
+            .isOk()
+            .expectBody(AuthorWithBooksResponse.class)
+            .returnResult()
+            .getResponseBody();
+
+    var captor = ArgumentCaptor.forClass(AddBooksToAuthorCommand.class);
+    verify(addBooksToAuthorUseCase).addBooksToAuthor(captor.capture());
+    var command = captor.getValue();
+    assertEquals(author.getId(), command.authorId());
+    assertEquals(List.of(new Id<Book>(existingBookId)), command.bookIds());
+    assertNotNull(response);
+    assertEquals(author.getId().value(), response.getAuthor().getId());
+  }
+
+  @Test
+  void addBooksToAuthorRejectsEmptyRequest() {
+    client
+        .post()
+        .uri("/api/v1/authors/{id}/books", UUID.randomUUID())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body("{}")
+        .exchange()
+        .expectStatus()
+        .isBadRequest();
+
+    verify(addBooksToAuthorUseCase, never()).addBooksToAuthor(any());
+  }
+
+  @Test
+  void addBooksToAuthorReturnsNotFoundForMissingBook() {
+    var bookId = UUID.randomUUID();
+    when(addBooksToAuthorUseCase.addBooksToAuthor(any(AddBooksToAuthorCommand.class)))
+        .thenThrow(new BookNotFoundException(new Id<Book>(bookId)));
+
+    client
+        .post()
+        .uri("/api/v1/authors/{id}/books", UUID.randomUUID())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body("{\"bookIds\":[\"" + bookId + "\"]}")
+        .exchange()
+        .expectStatus()
+        .isNotFound();
   }
 
   @Test

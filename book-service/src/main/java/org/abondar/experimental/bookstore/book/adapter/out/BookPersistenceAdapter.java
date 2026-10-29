@@ -125,6 +125,14 @@ public class BookPersistenceAdapter implements BookRepository {
         });
   }
 
+  @Override
+  public void addAuthorLinks(List<Book> books) {
+    if (books.isEmpty()) {
+      return;
+    }
+    dslContext.transaction(configuration -> addAuthorLinks(DSL.using(configuration), books));
+  }
+
   private void upsertBooks(DSLContext tx, List<Book> books) {
     var insert =
         tx.insertInto(
@@ -207,6 +215,31 @@ public class BookPersistenceAdapter implements BookRepository {
   }
 
   @Override
+  public List<Book> findByIds(List<Id<Book>> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    var bookIds = ids.stream().map(Id::value).toList();
+    var records = dslContext.selectFrom(BOOK).where(BOOK.ID.in(bookIds)).fetch();
+    var authorIdsByBook =
+        dslContext
+            .select(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID)
+            .from(BOOK_AUTHOR)
+            .where(BOOK_AUTHOR.BOOK_ID.in(bookIds))
+            .orderBy(BOOK_AUTHOR.BOOK_ID.asc(), BOOK_AUTHOR.AUTHOR_ORDER.asc())
+            .fetchGroups(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID);
+    return records.stream()
+        .map(
+            record ->
+                toBook(
+                    record,
+                    authorIdsByBook.getOrDefault(record.getId(), List.of()).stream()
+                        .map(authorId -> new Id<Author>(authorId))
+                        .toList()))
+        .toList();
+  }
+
+  @Override
   public Optional<Book> findByIsbn(Isbn isbn) {
     return dslContext
         .selectFrom(BOOK)
@@ -253,6 +286,10 @@ public class BookPersistenceAdapter implements BookRepository {
             .map(uuid -> new Id<Author>(uuid))
             .toList();
 
+    return toBook(record, authorIds);
+  }
+
+  private Book toBook(BookRecord record, List<Id<Author>> authorIds) {
     return Book.restore(
         new Id<>(record.getId()),
         new Isbn(record.getIsbn()),

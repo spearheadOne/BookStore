@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -17,10 +18,12 @@ import java.util.List;
 import java.util.Optional;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
+import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorCommand;
 import org.abondar.experimental.bookstore.author.application.port.in.UpdateAuthorCommand;
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorCacheRepository;
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorRepository;
 import org.abondar.experimental.bookstore.author.domain.Author;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
@@ -268,6 +271,94 @@ public class AuthorServiceTest {
         () -> authorService.saveAuthorWithBooks(author(), List.of()));
 
     verifyNoInteractions(authorRepository, bookRepository);
+  }
+
+  @Test
+  public void addExistingBooksToAuthor() {
+    var author = author();
+    var otherAuthorId = Id.<Author>generate();
+    var existing =
+        Book.create(
+            new Isbn("0306406152"), new Text("Existing"), null, null, List.of(otherAuthorId), null);
+    var second =
+        Book.create(new Isbn("9780134685991"), new Text("Second"), null, null, List.of(), null);
+    var unchanged =
+        Book.create(
+            new Isbn("9780201633610"),
+            new Text("Unchanged"),
+            null,
+            null,
+            List.of(author.getId()),
+            null);
+    var persistedExisting = existing.withAuthor(author.getId());
+    var persistedSecond = second.withAuthor(author.getId());
+    when(authorRepository.findById(author.getId())).thenReturn(Optional.of(author));
+    when(bookRepository.findByIds(List.of(existing.getId(), second.getId())))
+        .thenReturn(List.of(second, existing));
+    when(bookRepository.findByAuthor(author.getId()))
+        .thenReturn(List.of(unchanged, persistedExisting, persistedSecond));
+
+    var result =
+        authorService.addBooksToAuthor(
+            new AddBooksToAuthorCommand(author.getId(), List.of(existing.getId(), second.getId())));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<Book>> savedCaptor = ArgumentCaptor.forClass(List.class);
+    verify(bookRepository).addAuthorLinks(savedCaptor.capture());
+    var linkedExisting =
+        savedCaptor.getValue().stream()
+            .filter(book -> book.getId().equals(existing.getId()))
+            .findFirst()
+            .orElseThrow();
+    var linkedSecond =
+        savedCaptor.getValue().stream()
+            .filter(book -> book.getId().equals(second.getId()))
+            .findFirst()
+            .orElseThrow();
+    assertEquals(List.of(otherAuthorId, author.getId()), linkedExisting.getAuthorIds());
+    assertEquals(List.of(author.getId()), linkedSecond.getAuthorIds());
+    assertEquals(List.of(unchanged, persistedExisting, persistedSecond), result.books());
+    verifyNoInteractions(bookCacheRepository);
+
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(TransactionSynchronization::afterCommit);
+
+    verify(bookCacheRepository).deleteByIds(List.of(existing.getId(), second.getId()));
+  }
+
+  @Test
+  public void addBooksToMissingAuthor() {
+    var authorId = Id.<Author>generate();
+    var bookId = Id.<Book>generate();
+    when(authorRepository.findById(authorId)).thenReturn(Optional.empty());
+
+    assertThrows(
+        AuthorNotFoundException.class,
+        () ->
+            authorService.addBooksToAuthor(new AddBooksToAuthorCommand(authorId, List.of(bookId))));
+
+    verifyNoInteractions(bookRepository, bookCacheRepository);
+  }
+
+  @Test
+  public void addMissingExistingBookToAuthor() {
+    var author = author();
+    var existingBook =
+        Book.create(new Isbn("0306406152"), new Text("Existing"), null, null, List.of(), null);
+    var missingBookId = Id.<Book>generate();
+    when(authorRepository.findById(author.getId())).thenReturn(Optional.of(author));
+    when(bookRepository.findByIds(List.of(existingBook.getId(), missingBookId)))
+        .thenReturn(List.of(existingBook));
+
+    assertThrows(
+        BookNotFoundException.class,
+        () ->
+            authorService.addBooksToAuthor(
+                new AddBooksToAuthorCommand(
+                    author.getId(), List.of(existingBook.getId(), missingBookId))));
+
+    verify(bookRepository, never()).addAuthorLinks(anyList());
+    verifyNoInteractions(bookCacheRepository);
   }
 
   @Test

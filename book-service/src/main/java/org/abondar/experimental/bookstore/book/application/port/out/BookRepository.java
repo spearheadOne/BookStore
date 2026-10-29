@@ -15,7 +15,11 @@ public interface BookRepository {
 
   void saveMany(List<Book> books);
 
+  void addAuthorLinks(List<Book> books);
+
   Optional<Book> findById(Id<Book> id);
+
+  List<Book> findByIds(List<Id<Book>> ids);
 
   Optional<Book> findByIsbn(Isbn isbn);
 

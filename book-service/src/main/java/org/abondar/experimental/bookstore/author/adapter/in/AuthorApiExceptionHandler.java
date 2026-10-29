@@ -4,6 +4,7 @@ import java.time.DateTimeException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,7 +22,7 @@ public class AuthorApiExceptionHandler {
     return ResponseEntity.status(409).build();
   }
 
-  @ExceptionHandler(AuthorNotFoundException.class)
+  @ExceptionHandler({AuthorNotFoundException.class, BookNotFoundException.class})
   public ResponseEntity<Void> authorNotFound() {
     return ResponseEntity.notFound().build();
   }

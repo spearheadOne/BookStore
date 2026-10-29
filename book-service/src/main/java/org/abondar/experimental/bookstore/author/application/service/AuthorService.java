@@ -3,9 +3,12 @@ package org.abondar.experimental.bookstore.author.application.service;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
+import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorCommand;
+import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.DeleteAuthorUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorByIdUseCase;
 import org.abondar.experimental.bookstore.author.application.port.in.GetAuthorWithBooksByIdUseCase;
@@ -18,6 +21,7 @@ import org.abondar.experimental.bookstore.author.application.port.out.AuthorCach
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorRepository;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.author.domain.AuthorWithBooks;
+import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
@@ -30,7 +34,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @RequiredArgsConstructor
 public class AuthorService
-    implements SaveAuthorUseCase,
+    implements AddBooksToAuthorUseCase,
+        SaveAuthorUseCase,
         SaveAuthorWithBooksUseCase,
         UpdateAuthorUseCase,
         GetAuthorByIdUseCase,
@@ -81,6 +86,37 @@ public class AuthorService
             authorCacheRepository.save(author);
             bookCacheRepository.deleteByIds(bookIds);
             bookCacheRepository.saveMany(savedBooks);
+          }
+        });
+
+    return new AuthorWithBooks(author, savedBooks);
+  }
+
+  @Override
+  @Transactional
+  public AuthorWithBooks addBooksToAuthor(AddBooksToAuthorCommand command) {
+    var author =
+        authorRepository
+            .findById(command.authorId())
+            .orElseThrow(() -> new AuthorNotFoundException(command.authorId()));
+    var existingBooks = bookRepository.findByIds(command.bookIds());
+    var foundIds = existingBooks.stream().map(Book::getId).collect(Collectors.toSet());
+    for (var bookId : command.bookIds()) {
+      if (!foundIds.contains(bookId)) {
+        throw new BookNotFoundException(bookId);
+      }
+    }
+
+    var booksToLink =
+        existingBooks.stream().map(book -> book.withAuthor(command.authorId())).toList();
+    bookRepository.addAuthorLinks(booksToLink);
+    var savedBooks = bookRepository.findByAuthor(command.authorId());
+
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            bookCacheRepository.deleteByIds(command.bookIds());
           }
         });
 

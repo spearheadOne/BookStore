@@ -73,6 +73,31 @@ public class BookPersistencePersistenceAdapterTest extends BasePersistenceAdapte
   }
 
   @Test
+  public void findBooksByIds() {
+    var authorId = insertAuthor("Bulk lookup");
+    var first =
+        Book.create(new Isbn("0201633612"), new Text("First"), null, null, List.of(authorId), null);
+    var second =
+        Book.create(new Isbn("0132350882"), new Text("Second"), null, null, List.of(), null);
+    adapter.save(first);
+    adapter.save(second);
+
+    var found = adapter.findByIds(List.of(first.getId(), second.getId(), Id.generate()));
+
+    assertEquals(
+        Set.of(first.getId(), second.getId()),
+        found.stream().map(Book::getId).collect(java.util.stream.Collectors.toSet()));
+    assertEquals(
+        List.of(authorId),
+        found.stream()
+            .filter(book -> book.getId().equals(first.getId()))
+            .findFirst()
+            .orElseThrow()
+            .getAuthorIds());
+    assertTrue(adapter.findByIds(List.of()).isEmpty());
+  }
+
+  @Test
   public void saveRejectsDuplicateIsbn() {
     var first =
         Book.create(new Isbn("9781234567897"), new Text("First copy"), null, null, List.of(), null);
@@ -365,6 +390,44 @@ public class BookPersistencePersistenceAdapterTest extends BasePersistenceAdapte
     assertAll(
         () -> assertEquals(updatedBook.getTitle(), foundBook.getTitle()),
         () -> assertEquals(List.of(authorId, newAuthorId), foundBook.getAuthorIds()));
+  }
+
+  @Test
+  public void addAuthorLinksDoesNotUpdateBookFields() {
+    var firstAuthorId = insertAuthor("Existing link");
+    var secondAuthorId = insertAuthor("Added link");
+    var book =
+        Book.create(
+            new Isbn("0131103628"),
+            new Text("Stored title"),
+            null,
+            null,
+            List.of(firstAuthorId),
+            null);
+    adapter.save(book);
+    var staleBook =
+        Book.restore(
+            book.getId(),
+            book.getIsbn(),
+            new Text("Stale title"),
+            null,
+            null,
+            List.of(firstAuthorId, secondAuthorId),
+            null,
+            book.getCreatedAt(),
+            book.getUpdatedAt());
+
+    adapter.addAuthorLinks(List.of(staleBook));
+    adapter.addAuthorLinks(List.of(staleBook));
+
+    var found = adapter.findById(book.getId()).orElseThrow();
+    assertAll(
+        () -> assertEquals(new Text("Stored title"), found.getTitle()),
+        () -> assertEquals(List.of(firstAuthorId, secondAuthorId), found.getAuthorIds()),
+        () ->
+            assertEquals(
+                2,
+                dslContext.fetchCount(BOOK_AUTHOR, BOOK_AUTHOR.BOOK_ID.eq(book.getId().value()))));
   }
 
   @Test
