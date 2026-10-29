@@ -16,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Repository
 public class AuthorCacheRedisAdapter extends BaseCacheRepository implements AuthorCacheRepository {
 
-  private static final String ID_KEY_PREFIX = "author:id:v1:";
+  private static final String KEY_PREFIX = "author:v1:";
 
   public AuthorCacheRedisAdapter(
       StringRedisTemplate redisTemplate, JsonMapper jsonMapper, CacheProperties cacheProperties) {
@@ -24,12 +24,12 @@ public class AuthorCacheRedisAdapter extends BaseCacheRepository implements Auth
   }
 
   private String key(Id<Author> id) {
-    return ID_KEY_PREFIX + id.value();
+    return cacheKey(KEY_PREFIX, id);
   }
 
   @Override
   public void save(Author author) {
-    var idCached =
+    var cached =
         new CachedAuthor(
             author.getFirstName().value(),
             author.getLastName().value(),
@@ -41,27 +41,17 @@ public class AuthorCacheRedisAdapter extends BaseCacheRepository implements Auth
             author.getCreatedAt(),
             author.getUpdatedAt());
 
-    redisTemplate
-        .opsForValue()
-        .set(
-            key(author.getId()),
-            jsonMapper.writeValueAsString(idCached),
-            cacheProperties.authorIdTtl());
+    cacheSave(key(author.getId()), cached, cacheProperties.authorTtl());
   }
 
   @Override
   public Optional<Author> findById(Id<Author> id) {
-    var val = redisTemplate.opsForValue().get(key(id));
-    if (val == null) {
-      return Optional.empty();
-    }
-
-    return Optional.of(toAuthor(id, jsonMapper.readValue(val, CachedAuthor.class)));
+    return cacheFind(key(id), CachedAuthor.class).map(cached -> toAuthor(id, cached));
   }
 
   @Override
   public void delete(Id<Author> id) {
-    redisTemplate.delete(key(id));
+    cacheDelete(key(id));
   }
 
   private Author toAuthor(Id<Author> id, CachedAuthor cachedAuthor) {

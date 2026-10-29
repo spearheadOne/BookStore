@@ -95,6 +95,6 @@ class AuthorCacheRedisAdapterTest extends BaseRedisAdapterTest {
   }
 
   private String key(Id<Author> id) {
-    return "author:id:v1:" + id.value();
+    return "author:v1:" + id.value();
   }
 }

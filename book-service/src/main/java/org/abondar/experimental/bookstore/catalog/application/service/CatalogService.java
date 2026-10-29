@@ -11,6 +11,7 @@ import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalog
 import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalogWithBooksUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.in.SaveCatalogUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.in.UpdateCatalogNameUseCase;
+import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogCacheRepository;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogRepository;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.catalog.domain.CatalogWithBooks;
@@ -31,6 +32,8 @@ public class CatalogService
 
   private final BookRepository bookRepository;
 
+  private final CatalogCacheRepository catalogCacheRepository;
+
   @Override
   public void saveCatalog(Catalog catalog) {
     var exists = catalogRepository.findByName(catalog.getName().value());
@@ -39,6 +42,7 @@ public class CatalogService
     }
 
     catalogRepository.save(catalog);
+    catalogCacheRepository.save(catalog);
   }
 
   @Override
@@ -58,29 +62,33 @@ public class CatalogService
     var updated = Catalog.restore(catalogId, updatedName, catalog.get().getCreatedAt(), updatedAt);
 
     catalogRepository.update(updated);
+    catalogCacheRepository.save(updated);
 
     return updated;
   }
 
   @Override
   public Optional<Catalog> getCatalog(Id<Catalog> catalogId) {
-    return catalogRepository.findById(catalogId);
+    var catalog = catalogCacheRepository.findById(catalogId);
+    if (catalog.isPresent()) {
+      return catalog;
+    }
+
+    catalog = catalogRepository.findById(catalogId);
+    catalog.ifPresent(catalogCacheRepository::save);
+
+    return catalog;
   }
 
   @Override
   public Optional<CatalogWithBooks> getCatalogWithBooks(Id<Catalog> catalogId) {
-    var catalog = catalogRepository.findById(catalogId);
-    if (catalog.isEmpty()) {
-      return Optional.empty();
-    }
-
-    var books = bookRepository.findByCatalogId(catalogId);
-
-    return Optional.of(new CatalogWithBooks(catalog.get(), books));
+    return getCatalog(catalogId)
+        .map(catalog -> new CatalogWithBooks(catalog, bookRepository.findByCatalogId(catalogId)));
   }
 
   @Override
   public void deleteCatalog(Id<Catalog> catalogId) {
     catalogRepository.delete(catalogId);
+    catalogCacheRepository.delete(catalogId);
   }
 }

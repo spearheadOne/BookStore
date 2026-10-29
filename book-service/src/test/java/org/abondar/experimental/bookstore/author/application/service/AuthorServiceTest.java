@@ -443,6 +443,20 @@ public class AuthorServiceTest {
     assertAll(
         () -> assertSame(author, result.orElseThrow().author()),
         () -> assertEquals(List.of(book), result.orElseThrow().books()));
+    verify(authorCacheRepository).save(author);
+  }
+
+  @Test
+  public void getAuthorWithBooksByIdFromCache() {
+    var author = author();
+    when(authorCacheRepository.findById(author.getId())).thenReturn(Optional.of(author));
+    when(bookRepository.findByAuthor(author.getId())).thenReturn(List.of());
+
+    var result = authorService.getAuthorWithBooksById(author.getId()).orElseThrow();
+
+    assertSame(author, result.author());
+    assertTrue(result.books().isEmpty());
+    verifyNoInteractions(authorRepository);
   }
 
   @Test

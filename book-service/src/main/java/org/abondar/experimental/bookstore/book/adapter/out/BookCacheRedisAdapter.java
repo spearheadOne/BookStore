@@ -34,17 +34,12 @@ public class BookCacheRedisAdapter extends BaseCacheRepository implements BookCa
   }
 
   private String key(Id<Book> id) {
-    return KEY_PREFIX + id.value();
+    return cacheKey(KEY_PREFIX, id);
   }
 
   @Override
   public void save(Book book) {
-    redisTemplate
-        .opsForValue()
-        .set(
-            key(book.getId()),
-            jsonMapper.writeValueAsString(toCachedBook(book)),
-            cacheProperties.bookTtl());
+    cacheSave(key(book.getId()), toCachedBook(book), cacheProperties.bookTtl());
   }
 
   @Override
@@ -88,12 +83,7 @@ public class BookCacheRedisAdapter extends BaseCacheRepository implements BookCa
 
   @Override
   public Optional<Book> findById(Id<Book> id) {
-    var value = redisTemplate.opsForValue().get(key(id));
-    if (value == null) {
-      return Optional.empty();
-    }
-    var cached = jsonMapper.readValue(value, CachedBook.class);
-    return Optional.of(toBook(id, cached));
+    return cacheFind(key(id), CachedBook.class).map(cached -> toBook(id, cached));
   }
 
   @Override
@@ -114,7 +104,7 @@ public class BookCacheRedisAdapter extends BaseCacheRepository implements BookCa
 
   @Override
   public void delete(Id<Book> id) {
-    redisTemplate.delete(key(id));
+    cacheDelete(key(id));
   }
 
   @Override

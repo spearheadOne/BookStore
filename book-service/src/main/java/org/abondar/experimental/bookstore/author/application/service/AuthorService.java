@@ -171,14 +171,8 @@ public class AuthorService
 
   @Override
   public Optional<AuthorWithBooks> getAuthorWithBooksById(Id<Author> id) {
-    var author = authorRepository.findById(id);
-    if (author.isEmpty()) {
-      return Optional.empty();
-    }
-
-    var books = bookRepository.findByAuthor(id);
-
-    return Optional.of(new AuthorWithBooks(author.get(), books));
+    return getAuthorById(id)
+        .map(author -> new AuthorWithBooks(author, bookRepository.findByAuthor(id)));
   }
 
   @Override

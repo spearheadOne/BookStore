@@ -19,6 +19,7 @@ import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogAlreadyExistsException;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
+import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogCacheRepository;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogRepository;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
@@ -37,6 +38,8 @@ public class CatalogServiceTest {
 
   @Mock private BookRepository bookRepository;
 
+  @Mock private CatalogCacheRepository catalogCacheRepository;
+
   @InjectMocks private CatalogService catalogService;
 
   @Test
@@ -46,6 +49,7 @@ public class CatalogServiceTest {
     catalogService.saveCatalog(catalog);
 
     verify(catalogRepository).save(catalog);
+    verify(catalogCacheRepository).save(catalog);
   }
 
   @Test
@@ -67,6 +71,7 @@ public class CatalogServiceTest {
 
     var saved = ArgumentCaptor.forClass(Catalog.class);
     verify(catalogRepository).update(saved.capture());
+    verify(catalogCacheRepository).save(result);
     assertAll(
         () -> assertSame(saved.getValue(), result),
         () -> assertEquals(catalog.getId(), saved.getValue().getId()),
@@ -116,6 +121,17 @@ public class CatalogServiceTest {
     when(catalogRepository.findById(catalog.getId())).thenReturn(Optional.of(catalog));
 
     assertSame(catalog, catalogService.getCatalog(catalog.getId()).orElseThrow());
+    verify(catalogCacheRepository).save(catalog);
+  }
+
+  @Test
+  public void getCatalogFromCache() {
+    var catalog = Catalog.create(new Text("Cached catalog"));
+    when(catalogCacheRepository.findById(catalog.getId())).thenReturn(Optional.of(catalog));
+
+    assertSame(catalog, catalogService.getCatalog(catalog.getId()).orElseThrow());
+
+    verifyNoInteractions(catalogRepository);
   }
 
   @Test
@@ -139,6 +155,20 @@ public class CatalogServiceTest {
     assertAll(
         () -> assertSame(catalog, found.catalog()),
         () -> assertEquals(List.of(book), found.books()));
+    verify(catalogCacheRepository).save(catalog);
+  }
+
+  @Test
+  public void getCatalogWithBooksFromCache() {
+    var catalog = Catalog.create(new Text("Cached catalog"));
+    when(catalogCacheRepository.findById(catalog.getId())).thenReturn(Optional.of(catalog));
+    when(bookRepository.findByCatalogId(catalog.getId())).thenReturn(List.of());
+
+    var result = catalogService.getCatalogWithBooks(catalog.getId()).orElseThrow();
+
+    assertSame(catalog, result.catalog());
+    assertTrue(result.books().isEmpty());
+    verifyNoInteractions(catalogRepository);
   }
 
   @Test
@@ -156,5 +186,6 @@ public class CatalogServiceTest {
     catalogService.deleteCatalog(id);
 
     verify(catalogRepository).delete(id);
+    verify(catalogCacheRepository).delete(id);
   }
 }

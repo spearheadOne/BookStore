@@ -25,4 +25,5 @@ server:
 store:
   cache:
     book-ttl: ${BOOK_CACHE_TTL:30s}
-    author-id-ttl: ${AUTHOR_ID_CACHE_TTL:30s}
+    author-ttl: ${AUTHOR_ID_CACHE_TTL:30s}
+    catalog-ttl: ${CATALOG_TTL:30s}
