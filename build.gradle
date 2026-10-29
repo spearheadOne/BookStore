@@ -46,6 +46,13 @@ configure(serviceProjects) {
 
     dependencies {
         implementation("org.springframework.boot:spring-boot-starter-validation")
+        implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
+    }
+
+    tasks.named("processResources") {
+        from(layout.projectDirectory.file("src/main/openapi/openapi.yaml")) {
+            into("static")
+        }
     }
 
     def generatedApiPackage = "${project.group}.adapter.in.generated.${project.name.replace('-', '')}"
