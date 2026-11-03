@@ -48,6 +48,18 @@ springdoc:
   swagger-ui:
     url: /openapi.yaml
 
+resilience4j:
+  ratelimiter:
+    instances:
+      reads:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 0s
+      writes:
+        limit-for-period: 20
+        limit-refresh-period: 1s
+        timeout-duration: 0s
+
 store:
   cache:
     book-ttl: ${BOOK_CACHE_TTL:30s}

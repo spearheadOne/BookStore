@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Bookstore API
-  version: 1.0.0
+  version: 1.1.0
 security:
   - bearerAuth: [ ]
 paths:
@@ -19,6 +19,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '201':
           description: Book registered
           content:
@@ -45,6 +47,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Book found
           content:
@@ -67,6 +71,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Book updated
           content:
@@ -86,6 +92,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '204':
           description: Book deleted
 
@@ -103,6 +111,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '201':
           description: Author registered
           content:
@@ -126,6 +136,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Matching authors
           content:
@@ -151,6 +163,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '201':
           description: Author and books registered
           content:
@@ -177,6 +191,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Author found
           content:
@@ -199,6 +215,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Author updated
           content:
@@ -218,6 +236,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '204':
           description: Author deleted
 
@@ -236,6 +256,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Author and books found
           content:
@@ -257,6 +279,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Author with their current books
           content:
@@ -282,6 +306,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '201':
           description: Catalog registered
           content:
@@ -308,6 +334,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Catalog found
           content:
@@ -323,6 +351,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '204':
           description: Catalog deleted
         '409':
@@ -349,6 +379,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Catalog renamed
           content:
@@ -377,6 +409,8 @@ paths:
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: Catalog and books found
           content:
@@ -394,6 +428,8 @@ components:
       bearerFormat: JWT
       description: Obtain an access token from Keycloak and send it in the Authorization header using the Bearer scheme.
   responses:
+    TooManyRequests:
+      description: Request rate exceeded the read or write limit for this service instance. Retry after the limit refreshes.
     Unauthorized:
       description: Bearer token is missing, invalid, or expired, or has an unexpected issuer or audience.
       headers:

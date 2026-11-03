@@ -4,14 +4,19 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration;
@@ -19,6 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -87,6 +93,9 @@ class SecurityConfigTest {
 
   private static RestTestClient client;
   private static String token;
+  private static final AtomicLong limiterTime = new AtomicLong();
+
+  @Autowired private RateLimiterRegistry rateLimiters;
 
   @BeforeAll
   static void obtainToken() {
@@ -125,6 +134,7 @@ class SecurityConfigTest {
 
   @BeforeEach
   void setUp() {
+    limiterTime.addAndGet(Duration.ofSeconds(1).toNanos());
     if (client == null) {
       client = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
@@ -150,11 +160,7 @@ class SecurityConfigTest {
   @ParameterizedTest
   @ValueSource(strings = {"/api/v1/books/{id}", "/api/v1/authors/{id}", "/api/v1/catalogs/{id}"})
   void apiRejectsInvalidToken(String path) {
-    client
-        .get()
-        .uri(path, UUID.randomUUID())
-        .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token")
-        .exchange()
+    authenticatedRequest(HttpMethod.GET, path, "invalid-token", UUID.randomUUID())
         .expectStatus()
         .isUnauthorized();
   }
@@ -163,11 +169,7 @@ class SecurityConfigTest {
   @ValueSource(strings = {"/api/v1/books/{id}", "/api/v1/authors/{id}", "/api/v1/catalogs/{id}"})
   void validTokenPassesSecurity(String path) {
     // No business controllers are loaded: 404 confirms the request passed authentication.
-    client
-        .get()
-        .uri(path, UUID.randomUUID())
-        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-        .exchange()
+    authenticatedRequest(HttpMethod.GET, path, token, UUID.randomUUID())
         .expectStatus()
         .isNotFound();
   }
@@ -195,13 +197,66 @@ class SecurityConfigTest {
     var tamperedToken =
         token.substring(0, signatureStart) + replacement + token.substring(signatureStart + 1);
 
-    client
-        .get()
-        .uri("/api/v1/books/{id}", UUID.randomUUID())
-        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tamperedToken)
-        .exchange()
+    authenticatedRequest(HttpMethod.GET, "/api/v1/books/{id}", tamperedToken, UUID.randomUUID())
         .expectStatus()
         .isUnauthorized();
+  }
+
+  @Test
+  void readLimitReturns429AndRecoversAfterRefresh() {
+    authenticatedRequest(HttpMethod.GET).expectStatus().isNotFound();
+    authenticatedRequest(HttpMethod.GET).expectStatus().isNotFound();
+    authenticatedRequest(HttpMethod.GET).expectStatus().isEqualTo(429);
+
+    limiterTime.addAndGet(Duration.ofSeconds(1).toNanos());
+
+    authenticatedRequest(HttpMethod.GET).expectStatus().isNotFound();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"POST", "PATCH", "DELETE"})
+  void writeMethodsShareLimit(String method) {
+    authenticatedRequest(HttpMethod.POST).expectStatus().isNotFound();
+    authenticatedRequest(HttpMethod.valueOf(method)).expectStatus().isEqualTo(429);
+  }
+
+  @Test
+  void readAndWriteLimitsAreIndependent() {
+    rateLimiters.rateLimiter("reads").drainPermissions();
+    authenticatedRequest(HttpMethod.GET).expectStatus().isEqualTo(429);
+    authenticatedRequest(HttpMethod.POST).expectStatus().isNotFound();
+    authenticatedRequest(HttpMethod.POST).expectStatus().isEqualTo(429);
+  }
+
+  @Test
+  void publicPathsBypassExhaustedLimits() {
+    rateLimiters.rateLimiter("reads").drainPermissions();
+    rateLimiters.rateLimiter("writes").drainPermissions();
+
+    client.get().uri("/openapi.yaml").exchange().expectStatus().isNotFound();
+  }
+
+  @Test
+  void exhaustedLimitDoesNotReplaceAuthenticationErrors() {
+    rateLimiters.rateLimiter("reads").drainPermissions();
+
+    client.get().uri("/api/v1/books").exchange().expectStatus().isUnauthorized();
+    authenticatedRequest(HttpMethod.GET, "/api/v1/books", "invalid-token")
+        .expectStatus()
+        .isUnauthorized();
+  }
+
+  private RestTestClient.ResponseSpec authenticatedRequest(HttpMethod method) {
+    return authenticatedRequest(method, "/api/v1/books", token);
+  }
+
+  private RestTestClient.ResponseSpec authenticatedRequest(
+      HttpMethod method, String path, String bearerToken, Object... uriVariables) {
+    return client
+        .method(method)
+        .uri(path, uriVariables)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken)
+        .exchange();
   }
 
   @Configuration(proxyBeanMethods = false)
@@ -213,5 +268,24 @@ class SecurityConfigTest {
     SecurityFilterAutoConfiguration.class,
     OAuth2ResourceServerAutoConfiguration.class
   })
-  static class WebConfig {}
+  static class WebConfig {
+
+    @Bean
+    RateLimiterRegistry rateLimiterRegistry() {
+      var config =
+          RateLimiterConfig.custom()
+              .limitForPeriod(2)
+              .limitRefreshPeriod(Duration.ofSeconds(1))
+              .timeoutDuration(Duration.ZERO)
+              .build();
+      var registry = RateLimiterRegistry.of(config);
+      // Real limiters with a test clock: each test starts a fresh cycle without sleeping.
+      registry.rateLimiter("reads");
+      registry.replace("reads", RateLimiter.of("reads", config, limiterTime::get));
+      var writeConfig = RateLimiterConfig.from(config).limitForPeriod(1).build();
+      registry.rateLimiter("writes");
+      registry.replace("writes", RateLimiter.of("writes", writeConfig, limiterTime::get));
+      return registry;
+    }
+  }
 }
