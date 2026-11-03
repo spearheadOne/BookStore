@@ -1,4 +1,18 @@
 services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: book-service-keycloak
+    restart: unless-stopped
+    command: [ "start-dev", "--import-realm" ]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: book_auth
+      KC_BOOTSTRAP_ADMIN_PASSWORD: book_auth_pwd
+      KC_HOSTNAME: http://localhost:8081
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - book_store_keycloak_data:/opt/keycloak/data
+      - ./docker/keycloak/bookstore-realm.json:/opt/keycloak/data/import/bookstore-realm.json:ro
   postgres:
     image: postgres:17-alpine
     container_name: book-service-postgres
@@ -30,4 +44,5 @@ services:
 
 
 volumes:
+  book_store_keycloak_data:
   book_store_postgres_data:

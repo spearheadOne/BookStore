@@ -2,6 +2,8 @@ openapi: 3.0.3
 info:
   title: Bookstore API
   version: 1.0.0
+security:
+  - bearerAuth: [ ]
 paths:
   /api/v1/books:
     post:
@@ -15,6 +17,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterBookRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '201':
           description: Book registered
           content:
@@ -39,6 +43,8 @@ paths:
       operationId: getBook
       summary: Get a book by ID
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Book found
           content:
@@ -59,6 +65,8 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateBookRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Book updated
           content:
@@ -76,6 +84,8 @@ paths:
       operationId: deleteBook
       summary: Delete a book by ID
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '204':
           description: Book deleted
 
@@ -91,6 +101,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterAuthorRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '201':
           description: Author registered
           content:
@@ -112,6 +124,8 @@ paths:
           schema:
             type: string
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Matching authors
           content:
@@ -135,6 +149,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterAuthorWithBooksRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '201':
           description: Author and books registered
           content:
@@ -159,6 +175,8 @@ paths:
       operationId: getAuthorById
       summary: Get an author by ID
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Author found
           content:
@@ -179,6 +197,8 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateAuthorRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Author updated
           content:
@@ -196,6 +216,8 @@ paths:
       operationId: deleteAuthor
       summary: Delete an author by ID
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '204':
           description: Author deleted
 
@@ -212,6 +234,8 @@ paths:
       operationId: getAuthorWithBooksById
       summary: Get an author and their books
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Author and books found
           content:
@@ -231,6 +255,8 @@ paths:
             schema:
               $ref: '#/components/schemas/AddBooksToAuthorRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Author with their current books
           content:
@@ -254,6 +280,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterCatalogRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '201':
           description: Catalog registered
           content:
@@ -278,6 +306,8 @@ paths:
       operationId: getCatalog
       summary: Get a catalog by ID
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Catalog found
           content:
@@ -291,6 +321,8 @@ paths:
       operationId: deleteCatalog
       summary: Delete a catalog by ID
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '204':
           description: Catalog deleted
         '409':
@@ -315,6 +347,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RenameCatalogRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Catalog renamed
           content:
@@ -341,6 +375,8 @@ paths:
       operationId: getCatalogWithBooks
       summary: Get a catalog and its books
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Catalog and books found
           content:
@@ -351,6 +387,20 @@ paths:
           description: Catalog not found
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Obtain an access token from Keycloak and send it in the Authorization header using the Bearer scheme.
+  responses:
+    Unauthorized:
+      description: Bearer token is missing, invalid, or expired, or has an unexpected issuer or audience.
+      headers:
+        WWW-Authenticate:
+          description: Bearer authentication challenge.
+          schema:
+            type: string
   schemas:
     RegisterCatalogRequest:
       type: object

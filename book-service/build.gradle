@@ -4,26 +4,17 @@ plugins {
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-liquibase")
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+
     implementation("org.springframework.boot:spring-boot-starter-jooq")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
     runtimeOnly("org.postgresql:postgresql")
-    compileOnly("org.projectlombok:lombok")
-    annotationProcessor("org.projectlombok:lombok")
 
     jooqCodegen("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
-    testImplementation("org.springframework.boot:spring-boot-testcontainers")
-    testImplementation(platform("org.testcontainers:testcontainers-bom:2.0.2"))
-    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
-
-    testCompileOnly("org.projectlombok:lombok")
-    testAnnotationProcessor("org.projectlombok:lombok")
 }
 
 sourceSets {
