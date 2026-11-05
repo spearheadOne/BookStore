@@ -41,8 +41,32 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    container_name: book-service-seaweedfs
+    restart: unless-stopped
+    environment:
+      AWS_ACCESS_KEY_ID: book_admin
+      AWS_SECRET_ACCESS_KEY: book_secret
+      S3_BUCKET: book-store
+    command:
+      - mini
+      - -dir=/data
+      - -ip=seaweedfs
+      - -ip.bind=0.0.0.0
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - book_store_seaweedfs_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "--silent", "--max-time", "3", "http://localhost:8333/healthz" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 
 volumes:
   book_store_keycloak_data:
   book_store_postgres_data:
+  book_store_seaweedfs_data:
