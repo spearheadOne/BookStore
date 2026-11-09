@@ -1,15 +1,23 @@
 package org.abondar.experimental.bookstore.book.adapter.in;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.Year;
@@ -20,12 +28,16 @@ import java.util.UUID;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.BookResponse;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookContentStorageException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.DownloadBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.DownloadedBookContent;
 import org.abondar.experimental.bookstore.book.application.port.in.GetBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.UploadBookUseCase;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
@@ -37,8 +49,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.format.support.DefaultFormattingConversionService;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.client.RestTestClient;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
 class BookApiAdapterTest {
@@ -51,16 +67,30 @@ class BookApiAdapterTest {
 
   @Mock private DeleteBookUseCase deleteBookUseCase;
 
+  @Mock private UploadBookUseCase uploadBookUseCase;
+
+  @Mock private DownloadBookUseCase downloadBookUseCase;
+
+  private MockMvc mockMvc;
   private RestTestClient client;
 
   @BeforeEach
   void setUp() {
-    client =
-        RestTestClient.bindToController(
+    var conversionService = new DefaultFormattingConversionService();
+    conversionService.addConverter(new BookContentFormatConverter());
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
                 new BookApiAdapter(
-                    registerBookUseCase, getBookUseCase, updateBookUseCase, deleteBookUseCase))
-            .configureServer(server -> server.setControllerAdvice(new BookApiExceptionHandler()))
+                    registerBookUseCase,
+                    getBookUseCase,
+                    updateBookUseCase,
+                    deleteBookUseCase,
+                    uploadBookUseCase,
+                    downloadBookUseCase))
+            .setControllerAdvice(new BookApiExceptionHandler())
+            .setConversionService(conversionService)
             .build();
+    client = RestTestClient.bindTo(mockMvc).build();
   }
 
   @Test
@@ -72,13 +102,13 @@ class BookApiAdapterTest {
             .contentType(MediaType.APPLICATION_JSON)
             .body(
                 """
-                        {
-                          "isbn": "0306406152",
-                          "title": "  The Book  ",
-                          "description": "A description",
-                          "issueYear": 1980
-                        }
-                        """)
+                {
+                  "isbn": "0306406152",
+                  "title": "  The Book  ",
+                  "description": "A description",
+                  "issueYear": 1980
+                }
+                """)
             .exchange()
             .expectStatus()
             .isCreated()
@@ -148,8 +178,8 @@ class BookApiAdapterTest {
         .contentType(MediaType.APPLICATION_JSON)
         .body(
             """
-                        {"isbn":"123","title":"Invalid ISBN"}
-                        """)
+            {"isbn":"123","title":"Invalid ISBN"}
+            """)
         .exchange()
         .expectStatus()
         .isBadRequest();
@@ -169,8 +199,8 @@ class BookApiAdapterTest {
         .contentType(MediaType.APPLICATION_JSON)
         .body(
             """
-                        {"isbn":"0306406152","title":"Duplicate"}
-                        """)
+            {"isbn":"0306406152","title":"Duplicate"}
+            """)
         .exchange()
         .expectStatus()
         .isEqualTo(409);
@@ -216,15 +246,15 @@ class BookApiAdapterTest {
             .contentType(MediaType.APPLICATION_JSON)
             .body(
                 """
-                        {
-                          "isbn": "9780306406157",
-                          "title": "Updated Book",
-                          "description": "Updated description",
-                          "issueYear": 1981,
-                          "authorIds": ["%s"],
-                          "catalogId": "%s"
-                        }
-                                    """
+                {
+                  "isbn": "9780306406157",
+                  "title": "Updated Book",
+                  "description": "Updated description",
+                  "issueYear": 1981,
+                  "authorIds": ["%s"],
+                  "catalogId": "%s"
+                }
+                """
                     .formatted(newAuthorId, newCatalogId))
             .exchange()
             .expectStatus()
@@ -287,8 +317,8 @@ class BookApiAdapterTest {
         .contentType(MediaType.APPLICATION_JSON)
         .body(
             """
-                        {"isbn":"0306406152","title":"Missing Book","authorIds":[]}
-                        """)
+            {"isbn":"0306406152","title":"Missing Book","authorIds":[]}
+            """)
         .exchange()
         .expectStatus()
         .isNotFound()
@@ -310,8 +340,8 @@ class BookApiAdapterTest {
         .contentType(MediaType.APPLICATION_JSON)
         .body(
             """
-                        {"isbn":"9780306406157","title":"Updated","authorIds":[]}
-                        """)
+            {"isbn":"9780306406157","title":"Updated","authorIds":[]}
+            """)
         .exchange()
         .expectStatus()
         .isEqualTo(409);
@@ -331,6 +361,134 @@ class BookApiAdapterTest {
         .isEmpty();
 
     verify(deleteBookUseCase).deleteBook(new Id<>(id));
+  }
+
+  @Test
+  void uploadPassesFileAndMetadataToUseCase() throws Exception {
+    var book = existingBook();
+    var id = book.getId().value();
+    var bytes = new byte[] {1, 2, 3};
+    var file = new MockMultipartFile("file", "my-book.pdf", "application/pdf", bytes);
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    doAnswer(
+            invocation -> {
+              InputStream content = invocation.getArgument(1);
+              assertArrayEquals(bytes, content.readAllBytes());
+              return null;
+            })
+        .when(uploadBookUseCase)
+        .uploadBookContent(eq(id), any(InputStream.class), eq("pdf"), eq("my-book.pdf"), eq(3L));
+
+    mockMvc
+        .perform(multipart("/api/v1/books/{id}/content", id).file(file).param("format", "pdf"))
+        .andExpect(status().isNoContent());
+
+    verify(uploadBookUseCase)
+        .uploadBookContent(eq(id), any(InputStream.class), eq("pdf"), eq("my-book.pdf"), eq(3L));
+  }
+
+  @Test
+  void uploadRejectsMissingBook() throws Exception {
+    var id = UUID.randomUUID();
+    when(getBookUseCase.getBook(new Id<>(id))).thenReturn(Optional.empty());
+    var file = new MockMultipartFile("file", "my-book.pdf", "application/pdf", new byte[] {1});
+
+    mockMvc
+        .perform(multipart("/api/v1/books/{id}/content", id).file(file).param("format", "pdf"))
+        .andExpect(status().isNotFound());
+
+    verifyNoInteractions(uploadBookUseCase);
+  }
+
+  @Test
+  void uploadRejectsEmptyFile() throws Exception {
+    var book = existingBook();
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    var file = new MockMultipartFile("file", "my-book.pdf", "application/pdf", new byte[0]);
+
+    mockMvc
+        .perform(
+            multipart("/api/v1/books/{id}/content", book.getId().value())
+                .file(file)
+                .param("format", "pdf"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(uploadBookUseCase);
+  }
+
+  @Test
+  void downloadStreamsContentWithMediaTypeAndFilename() {
+    var book = existingBook();
+    var id = book.getId().value();
+    var bytes = new byte[] {1, 2, 3};
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    when(downloadBookUseCase.downloadBookContent(id, "pdf"))
+        .thenReturn(
+            Optional.of(
+                new DownloadedBookContent(
+                    new ByteArrayInputStream(bytes), "Über Bücher.pdf", "application/pdf")));
+
+    var result =
+        client
+            .get()
+            .uri("/api/v1/books/{id}/content?format=pdf", id)
+            .exchange()
+            .expectStatus()
+            .isOk()
+            .expectHeader()
+            .contentType(MediaType.APPLICATION_PDF)
+            .expectBody()
+            .returnResult();
+
+    assertArrayEquals(bytes, result.getResponseBody());
+    assertEquals(
+        "Über Bücher.pdf", result.getResponseHeaders().getContentDisposition().getFilename());
+  }
+
+  @Test
+  void downloadRejectsMissingOrUnsupportedFormat() {
+    var id = UUID.randomUUID();
+
+    client.get().uri("/api/v1/books/{id}/content", id).exchange().expectStatus().isBadRequest();
+    client
+        .get()
+        .uri("/api/v1/books/{id}/content?format=docx", id)
+        .exchange()
+        .expectStatus()
+        .isBadRequest();
+
+    verifyNoInteractions(getBookUseCase, downloadBookUseCase);
+  }
+
+  @Test
+  void downloadReturnsNotFoundWhenRequestedFormatIsMissing() {
+    var book = existingBook();
+    var id = book.getId().value();
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    when(downloadBookUseCase.downloadBookContent(id, "epub")).thenReturn(Optional.empty());
+
+    client
+        .get()
+        .uri("/api/v1/books/{id}/content?format=epub", id)
+        .exchange()
+        .expectStatus()
+        .isNotFound();
+  }
+
+  @Test
+  void downloadReturnsServiceUnavailableWhenStorageFails() {
+    var book = existingBook();
+    var id = book.getId().value();
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    when(downloadBookUseCase.downloadBookContent(id, "pdf"))
+        .thenThrow(new BookContentStorageException("Storage unavailable"));
+
+    client
+        .get()
+        .uri("/api/v1/books/{id}/content?format=pdf", id)
+        .exchange()
+        .expectStatus()
+        .isEqualTo(503);
   }
 
   private Book existingBook() {

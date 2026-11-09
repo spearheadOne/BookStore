@@ -27,5 +27,8 @@ public interface BookRepository {
 
   List<Book> findByCatalogId(Id<Catalog> catalogId);
 
+  /** Runs the operation under a database row lock if the book exists. */
+  boolean withBookLocked(Id<Book> id, Runnable operation);
+
   void delete(Id<Book> id);
 }

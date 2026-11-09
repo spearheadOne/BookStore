@@ -1,26 +1,37 @@
 package org.abondar.experimental.bookstore.book.adapter.in;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Year;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.adapter.in.ResponseMapper;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.api.BookApi;
+import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.BookContentFormat;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.BookResponse;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.RegisterBookRequest;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.UpdateBookRequest;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.DownloadBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.GetBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookUseCase;
+import org.abondar.experimental.bookstore.book.application.port.in.UploadBookUseCase;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
@@ -30,11 +41,36 @@ public class BookApiAdapter implements BookApi {
   private final GetBookUseCase getBookUseCase;
   private final UpdateBookUseCase updateBookUseCase;
   private final DeleteBookUseCase deleteBookUseCase;
+  private final UploadBookUseCase uploadBookUseCase;
+  private final DownloadBookUseCase downloadBookUseCase;
 
   @Override
   public ResponseEntity<Void> deleteBook(UUID id) {
     deleteBookUseCase.deleteBook(new Id<>(id));
     return ResponseEntity.status(204).build();
+  }
+
+  @Override
+  public ResponseEntity<Resource> downloadBookContent(UUID id, BookContentFormat format) {
+    var book = getBookUseCase.getBook(new Id<>(id));
+    if (book.isEmpty()) {
+      return ResponseEntity.notFound().build();
+    }
+
+    var content = downloadBookUseCase.downloadBookContent(id, format.getValue());
+    return content
+        .<ResponseEntity<Resource>>map(
+            download ->
+                ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(download.contentType()))
+                    .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                            .filename(download.originalFilename(), StandardCharsets.UTF_8)
+                            .build()
+                            .toString())
+                    .body(new InputStreamResource(download.stream())))
+        .orElseGet(() -> ResponseEntity.notFound().build());
   }
 
   @Override
@@ -85,5 +121,26 @@ public class BookApiAdapter implements BookApi {
     var updated = updateBookUseCase.updateBook(command);
 
     return ResponseEntity.ok(ResponseMapper.toBookResponse(updated));
+  }
+
+  @Override
+  public ResponseEntity<Void> uploadBookContent(
+      UUID id, MultipartFile file, BookContentFormat format) {
+    var book = getBookUseCase.getBook(new Id<>(id));
+    if (book.isEmpty()) {
+      return ResponseEntity.notFound().build();
+    }
+
+    if (file.isEmpty()) {
+      return ResponseEntity.badRequest().build();
+    }
+
+    try (var content = file.getInputStream()) {
+      uploadBookUseCase.uploadBookContent(
+          id, content, format.getValue(), file.getOriginalFilename(), file.getSize());
+      return ResponseEntity.noContent().build();
+    } catch (IOException e) {
+      return ResponseEntity.badRequest().build();
+    }
   }
 }

@@ -5,6 +5,7 @@ import static org.abondar.experimental.bookstore.adapter.out.persistence.generat
 import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.Tables.CATALOG;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Year;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.abondar.experimental.bookstore.BasePersistenceAdapterTest;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.adapter.out.BookPersistenceAdapter;
@@ -30,6 +35,62 @@ import org.springframework.dao.DataIntegrityViolationException;
 public class BookPersistencePersistenceAdapterTest extends BasePersistenceAdapterTest {
 
   @Autowired private BookPersistenceAdapter adapter;
+
+  @Test
+  void waitingUploadCannotWriteAfterBookDeletionCommits() throws Exception {
+    var book =
+        Book.create(
+            new Isbn("9783161484100"), new Text("Locked book"), null, null, List.of(), null);
+    var id = book.getId();
+    adapter.save(book);
+    var deletionHasLock = new CountDownLatch(1);
+    var allowDeletion = new CountDownLatch(1);
+    var uploadStarted = new CountDownLatch(1);
+
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      try {
+        var deletion =
+            executor.submit(
+                () ->
+                    adapter.withBookLocked(
+                        id,
+                        () -> {
+                          deletionHasLock.countDown();
+                          await(allowDeletion);
+                          adapter.delete(id);
+                        }));
+        await(deletionHasLock);
+        var upload =
+            executor.submit(
+                () -> {
+                  uploadStarted.countDown();
+                  return adapter.withBookLocked(
+                      id,
+                      () -> {
+                        throw new AssertionError("A deleted book must not reach storage");
+                      });
+                });
+        await(uploadStarted);
+        assertThrows(TimeoutException.class, () -> upload.get(200, TimeUnit.MILLISECONDS));
+        allowDeletion.countDown();
+
+        assertTrue(deletion.get(5, TimeUnit.SECONDS));
+        assertFalse(upload.get(5, TimeUnit.SECONDS));
+        assertTrue(adapter.findById(id).isEmpty());
+      } finally {
+        allowDeletion.countDown();
+      }
+    }
+  }
+
+  private static void await(CountDownLatch latch) {
+    try {
+      assertTrue(latch.await(5, TimeUnit.SECONDS));
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError("Interrupted waiting for concurrent book operation", e);
+    }
+  }
 
   @Test
   public void saveAndFindBook() {

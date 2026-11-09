@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Bookstore API
-  version: 1.1.0
+  version: 1.2.0
 security:
   - bearerAuth: [ ]
 paths:
@@ -96,6 +96,90 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '204':
           description: Book deleted
+        '503':
+          description: Content storage is temporarily unavailable
+
+  /api/v1/books/{id}/content:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [ Book ]
+      operationId: uploadBookContent
+      summary: Upload or replace a book's content in one format
+      description: >-
+        The book must already exist. EPUB, RTF, and PDF copies may coexist;
+        uploading an existing format replaces only that copy. The file must match
+        the declared format. The configurable default limits are 100 MiB per file
+        (104857600 bytes) and 110 MiB for the complete multipart request.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadBookContentRequest'
+      responses:
+        '204':
+          description: Book content uploaded or replaced
+        '400':
+          description: Invalid book ID, missing or empty file, missing or unsupported format, or file does not match the declared format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Book not found
+        '413':
+          description: File or complete multipart request exceeds the configured size limit
+        '415':
+          description: Request content type is not multipart/form-data
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Content storage is temporarily unavailable
+    get:
+      tags: [ Book ]
+      operationId: downloadBookContent
+      summary: Download a book's content in the requested format
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/BookContentFormat'
+      responses:
+        '200':
+          description: Book content streamed in the requested format
+          headers:
+            Content-Disposition:
+              description: Attachment disposition with the original filename, safely encoded for HTTP headers.
+              schema:
+                type: string
+          content:
+            application/epub+zip:
+              schema:
+                type: string
+                format: binary
+            application/rtf:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid book ID or missing or unsupported format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Book or requested content format not found
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Content storage is temporarily unavailable
 
   /api/v1/authors:
     post:
@@ -438,6 +522,21 @@ components:
           schema:
             type: string
   schemas:
+    BookContentFormat:
+      type: string
+      enum: [ epub, rtf, pdf ]
+
+    UploadBookContentRequest:
+      type: object
+      required: [ file, format ]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Non-empty EPUB, RTF, or PDF file matching the declared format; default maximum size is 100 MiB.
+        format:
+          $ref: '#/components/schemas/BookContentFormat'
+
     RegisterCatalogRequest:
       type: object
       required: [ name ]

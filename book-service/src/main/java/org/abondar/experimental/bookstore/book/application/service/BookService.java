@@ -5,6 +5,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookContentUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.GetBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookUseCase;
@@ -23,6 +24,7 @@ public class BookService
 
   private final BookRepository bookRepository;
   private final BookCacheRepository bookCacheRepository;
+  private final DeleteBookContentUseCase deleteBookContentUseCase;
 
   @Override
   public void registerBook(Book book) {
@@ -73,7 +75,12 @@ public class BookService
 
   @Override
   public void deleteBook(Id<Book> id) {
-    bookRepository.delete(id);
+    bookRepository.withBookLocked(
+        id,
+        () -> {
+          deleteBookContentUseCase.deleteBookContent(id.value());
+          bookRepository.delete(id);
+        });
     bookCacheRepository.delete(id);
   }
 }

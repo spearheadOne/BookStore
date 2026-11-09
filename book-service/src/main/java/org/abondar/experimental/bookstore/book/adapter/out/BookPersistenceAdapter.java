@@ -24,6 +24,7 @@ import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 @RequiredArgsConstructor
@@ -267,6 +268,18 @@ public class BookPersistenceAdapter implements BookRepository {
         .where(BOOK.CATALOG_ID.eq(catalogId.value()))
         .fetch()
         .map(this::toBook);
+  }
+
+  @Override
+  @Transactional
+  public boolean withBookLocked(Id<Book> id, Runnable operation) {
+    var locked =
+        dslContext.select(BOOK.ID).from(BOOK).where(BOOK.ID.eq(id.value())).forUpdate().fetchOne();
+    if (locked == null) {
+      return false;
+    }
+    operation.run();
+    return true;
   }
 
   @Override

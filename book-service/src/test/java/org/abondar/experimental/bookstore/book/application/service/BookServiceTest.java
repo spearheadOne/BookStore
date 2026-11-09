@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookContentUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
@@ -37,6 +39,8 @@ public class BookServiceTest {
   @Mock private BookRepository bookRepository;
 
   @Mock private BookCacheRepository bookCacheRepository;
+
+  @Mock private DeleteBookContentUseCase deleteBookContentUseCase;
 
   @InjectMocks private BookService bookService;
 
@@ -177,20 +181,46 @@ public class BookServiceTest {
   @Test
   public void deleteTest() {
     Id<Book> id = Id.generate();
+    lockBook(id);
     bookService.deleteBook(id);
 
-    var writes = inOrder(bookRepository, bookCacheRepository);
+    var writes = inOrder(deleteBookContentUseCase, bookRepository, bookCacheRepository);
+    writes.verify(deleteBookContentUseCase).deleteBookContent(id.value());
     writes.verify(bookRepository).delete(id);
     writes.verify(bookCacheRepository).delete(id);
   }
 
   @Test
+  public void deleteKeepsBookWhenContentCleanupFails() {
+    Id<Book> id = Id.generate();
+    lockBook(id);
+    var failure = new IllegalStateException("Content storage unavailable");
+    doThrow(failure).when(deleteBookContentUseCase).deleteBookContent(id.value());
+
+    assertSame(
+        failure, assertThrows(IllegalStateException.class, () -> bookService.deleteBook(id)));
+
+    verify(bookRepository, never()).delete(id);
+    verifyNoInteractions(bookCacheRepository);
+  }
+
+  @Test
   public void deleteDoesNotEvictWhenRepositoryFails() {
     Id<Book> id = Id.generate();
+    lockBook(id);
     doThrow(new BookNotFoundException(id)).when(bookRepository).delete(id);
 
     assertThrows(BookNotFoundException.class, () -> bookService.deleteBook(id));
 
     verify(bookCacheRepository, never()).delete(id);
+  }
+
+  private void lockBook(Id<Book> id) {
+    when(bookRepository.withBookLocked(eq(id), any(Runnable.class)))
+        .thenAnswer(
+            invocation -> {
+              invocation.<Runnable>getArgument(1).run();
+              return true;
+            });
   }
 }
