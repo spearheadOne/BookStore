@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
 import org.abondar.experimental.bookstore.author.application.port.in.AddBooksToAuthorCommand;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthorService
@@ -58,6 +60,7 @@ public class AuthorService
     }
 
     authorRepository.save(author);
+    log.debug("Registered author {}", author.getId().value());
     authorCacheRepository.save(author);
   }
 
@@ -83,6 +86,8 @@ public class AuthorService
         new TransactionSynchronization() {
           @Override
           public void afterCommit() {
+            log.debug(
+                "Registered author {} with {} books", author.getId().value(), savedBooks.size());
             authorCacheRepository.save(author);
             bookCacheRepository.deleteByIds(bookIds);
             bookCacheRepository.saveMany(savedBooks);
@@ -116,6 +121,10 @@ public class AuthorService
         new TransactionSynchronization() {
           @Override
           public void afterCommit() {
+            log.debug(
+                "Processed {} book links for author {}",
+                existingBooks.size(),
+                command.authorId().value());
             bookCacheRepository.deleteByIds(command.bookIds());
           }
         });
@@ -152,6 +161,7 @@ public class AuthorService
             now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
 
     authorRepository.update(updated);
+    log.debug("Updated author {}", authorCommand.id().value());
     authorCacheRepository.save(updated);
     return updated;
   }
@@ -184,6 +194,7 @@ public class AuthorService
   public void deleteAuthor(Id<Author> id) {
     var bookIds = bookRepository.findByAuthor(id).stream().map(Book::getId).toList();
     authorRepository.delete(id);
+    log.debug("Processed deletion of author {}", id.value());
     authorCacheRepository.delete(id);
     bookCacheRepository.deleteByIds(bookIds);
   }

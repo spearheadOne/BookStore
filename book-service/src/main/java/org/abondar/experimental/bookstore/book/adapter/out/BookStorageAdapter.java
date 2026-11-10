@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.book.application.exception.BookContentStorageException;
 import org.abondar.experimental.bookstore.book.application.port.in.DownloadedBookContent;
 import org.abondar.experimental.bookstore.book.application.port.out.BookContentRepository;
@@ -19,6 +20,7 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+@Slf4j
 @Repository
 public class BookStorageAdapter implements BookContentRepository {
 
@@ -62,7 +64,7 @@ public class BookStorageAdapter implements BookContentRepository {
         try {
           filename = URLDecoder.decode(encodedFilename, StandardCharsets.UTF_8);
         } catch (IllegalArgumentException ignored) {
-          // Objects with malformed filename metadata can still be downloaded by key.
+          log.debug("Using the object basename for malformed filename metadata on key {}", key);
         }
       }
       var contentType = response.contentType();

@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.catalog.application.service;
 import java.time.Instant;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogAlreadyExistsException;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
@@ -19,6 +20,7 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CatalogService
@@ -42,6 +44,7 @@ public class CatalogService
     }
 
     catalogRepository.save(catalog);
+    log.debug("Registered catalog {}", catalog.getId().value());
     catalogCacheRepository.save(catalog);
   }
 
@@ -62,6 +65,7 @@ public class CatalogService
     var updated = Catalog.restore(catalogId, updatedName, catalog.get().getCreatedAt(), updatedAt);
 
     catalogRepository.update(updated);
+    log.debug("Renamed catalog {}", catalogId.value());
     catalogCacheRepository.save(updated);
 
     return updated;
@@ -89,6 +93,7 @@ public class CatalogService
   @Override
   public void deleteCatalog(Id<Catalog> catalogId) {
     catalogRepository.delete(catalogId);
+    log.debug("Processed deletion of catalog {}", catalogId.value());
     catalogCacheRepository.delete(catalogId);
   }
 }

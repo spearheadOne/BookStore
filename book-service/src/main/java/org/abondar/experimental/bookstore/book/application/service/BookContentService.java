@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookContentUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.DownloadBookUseCase;
@@ -23,6 +24,7 @@ import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookContentService
@@ -36,7 +38,12 @@ public class BookContentService
 
   @Override
   public Optional<DownloadedBookContent> downloadBookContent(UUID id, String format) {
-    return storageRepository.downloadBookContent(BookFormat.parse(format).key(id));
+    var bookFormat = BookFormat.parse(format);
+    var content = storageRepository.downloadBookContent(bookFormat.key(id));
+    if (content.isEmpty()) {
+      log.debug("No {} content found for book {}", bookFormat, id);
+    }
+    return content;
   }
 
   @Override
@@ -54,12 +61,14 @@ public class BookContentService
     if (!exists) {
       throw new BookNotFoundException(bookId);
     }
+    log.debug("Stored {} content for book {} ({} bytes)", bookFormat, id, size);
   }
 
   @Override
   public void deleteBookContent(UUID id) {
     storageRepository.deleteBookContent(
         Arrays.stream(BookFormat.values()).map(format -> format.key(id)).toList());
+    log.debug("Cleaned up stored content for book {}", id);
   }
 
   private BufferedInputStream validateHeader(InputStream file, BookFormat format) {

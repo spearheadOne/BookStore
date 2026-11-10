@@ -6,6 +6,7 @@ import java.time.Year;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.adapter.in.ResponseMapper;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.api.BookApi;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.BookContentFormat;
@@ -33,6 +34,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class BookApiAdapter implements BookApi {
@@ -140,6 +142,8 @@ public class BookApiAdapter implements BookApi {
           id, content, format.getValue(), file.getOriginalFilename(), file.getSize());
       return ResponseEntity.noContent().build();
     } catch (IOException e) {
+      log.debug(
+          "Could not read the uploaded file for book {} ({})", id, e.getClass().getSimpleName());
       return ResponseEntity.badRequest().build();
     }
   }

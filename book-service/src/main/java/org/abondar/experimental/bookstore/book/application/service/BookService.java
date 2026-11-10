@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.book.application.service;
 import java.time.Instant;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookContentUseCase;
@@ -17,6 +18,7 @@ import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookService
@@ -32,6 +34,7 @@ public class BookService
 
     if (!exists) {
       bookRepository.save(book);
+      log.debug("Registered book {}", book.getId().value());
       bookCacheRepository.save(book);
     } else {
       throw new BookAlreadyExistsException(book.getIsbn());
@@ -69,18 +72,25 @@ public class BookService
             now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
 
     bookRepository.update(updated);
+    log.debug("Updated book {}", command.id().value());
     bookCacheRepository.save(updated);
     return updated;
   }
 
   @Override
   public void deleteBook(Id<Book> id) {
-    bookRepository.withBookLocked(
-        id,
-        () -> {
-          deleteBookContentUseCase.deleteBookContent(id.value());
-          bookRepository.delete(id);
-        });
+    boolean deleted =
+        bookRepository.withBookLocked(
+            id,
+            () -> {
+              deleteBookContentUseCase.deleteBookContent(id.value());
+              bookRepository.delete(id);
+            });
+    if (deleted) {
+      log.debug("Deleted book {}", id.value());
+    } else {
+      log.debug("Book {} was already absent during deletion", id.value());
+    }
     bookCacheRepository.delete(id);
   }
 }
