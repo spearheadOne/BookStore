@@ -29,7 +29,18 @@ sourceSets {
 }
 
 bootBuildImage {
-    imageName = "abondar/bookstore-book-service"
+    imageName = "abondar/bookstore-book-service:${project.version}"
+    builder = "paketobuildpacks/builder-noble-java-tiny:latest"
+    runImage = "paketobuildpacks/ubuntu-noble-run-tiny:latest"
+    buildpacks = [
+            "docker.io/paketobuildpacks/adoptium:latest",
+            "docker.io/paketobuildpacks/java:latest"
+    ]
+    environment = [
+            "BP_JVM_VERSION": "25",
+            "BP_JVM_TYPE"   : "JRE"
+    ]
+    publish = false
 }
 
 def dbHost = System.getenv("DB_HOST") ?: "localhost"

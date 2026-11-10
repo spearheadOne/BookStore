@@ -22,13 +22,18 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/bookstore}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/bookstore}/protocol/openid-connect/certs}
           audiences:
-            - book-service
+            - ${KEYCLOAK_AUDIENCE:book-service}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -48,7 +53,7 @@ management:
       status:
         order: DOWN,OUT_OF_SERVICE,UP
   server:
-    port: 8001
+    port: ${MANAGEMENT_SERVER_PORT:8001}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -79,8 +84,9 @@ store:
     catalog-topic: ${CATALOG_TOPIC:bookstore.catalog-events}
 
 s3:
+  endpoint: ${BOOK_S3_ENDPOINT:}
   bucket: ${BOOK_S3_BUCKET:book-store}
   region: ${BOOK_S3_REGION:us-east-1}
-  path-style: false
-  connect-timeout: 1s
-  request-timeout: 2m
+  path-style: ${BOOK_S3_PATH_STYLE:false}
+  connect-timeout: ${BOOK_S3_CONNECT_TIMEOUT:1s}
+  request-timeout: ${BOOK_S3_REQUEST_TIMEOUT:2m}

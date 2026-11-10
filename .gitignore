@@ -32,3 +32,10 @@ build
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Local environment files; keep templates versioned.
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
