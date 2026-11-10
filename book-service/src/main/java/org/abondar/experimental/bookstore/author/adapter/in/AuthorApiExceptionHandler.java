@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorAlreadyExistsException;
 import org.abondar.experimental.bookstore.author.application.exception.AuthorNotFoundException;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,12 @@ public class AuthorApiExceptionHandler {
   public ResponseEntity<Void> authorNotFound(RuntimeException exception) {
     log.debug("{}", exception.getMessage());
     return ResponseEntity.notFound().build();
+  }
+
+  @ExceptionHandler(BookEventPublicationException.class)
+  public ResponseEntity<Void> bookEventPublicationFailed(BookEventPublicationException exception) {
+    log.error("Could not publish book events after author registration", exception);
+    return ResponseEntity.status(503).build();
   }
 
   @ExceptionHandler({IllegalArgumentException.class, DateTimeException.class})

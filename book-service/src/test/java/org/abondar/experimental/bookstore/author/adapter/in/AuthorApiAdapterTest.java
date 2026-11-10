@@ -31,6 +31,7 @@ import org.abondar.experimental.bookstore.author.application.port.in.UpdateAutho
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.author.domain.AuthorWithBooks;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
+import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -86,9 +87,9 @@ class AuthorApiAdapterTest {
             .contentType(MediaType.APPLICATION_JSON)
             .body(
                 """
-                                        {"firstName":"Ada","lastName":"Lovelace","sortName":"Lovelace, Ada",
-                                         "dateOfBirth":"1815-12-10","countryCode":"GB"}
-                                        """)
+                {"firstName":"Ada","lastName":"Lovelace","sortName":"Lovelace, Ada",
+                 "dateOfBirth":"1815-12-10","countryCode":"GB"}
+                """)
             .exchange()
             .expectStatus()
             .isCreated()
@@ -252,10 +253,10 @@ class AuthorApiAdapterTest {
             .contentType(MediaType.APPLICATION_JSON)
             .body(
                 """
-                                        {"author":{"firstName":"Ada","lastName":"Lovelace"},
-                                         "books":[{"id":"%s","isbn":"0306406152","title":"Existing book",
-                                         "authorIds":["%s"],"catalogId":"%s"}]}
-                                        """
+                {"author":{"firstName":"Ada","lastName":"Lovelace"},
+                 "books":[{"id":"%s","isbn":"0306406152","title":"Existing book",
+                 "authorIds":["%s"],"catalogId":"%s"}]}
+                """
                     .formatted(existingBookId, otherAuthorId, catalogId))
             .exchange()
             .expectStatus()
@@ -365,9 +366,9 @@ class AuthorApiAdapterTest {
         .contentType(MediaType.APPLICATION_JSON)
         .body(
             """
-                                {"author":{"firstName":"Ada","lastName":"Lovelace"},
-                                 "books":[{"isbn":"0306406152","title":"Book"}]}
-                                """)
+            {"author":{"firstName":"Ada","lastName":"Lovelace"},
+             "books":[{"isbn":"0306406152","title":"Book"}]}
+            """)
         .exchange()
         .expectStatus()
         .isEqualTo(409);
@@ -384,12 +385,32 @@ class AuthorApiAdapterTest {
         .contentType(MediaType.APPLICATION_JSON)
         .body(
             """
-                                {"author":{"firstName":"Ada","lastName":"Lovelace"},
-                                 "books":[{"isbn":"0306406152","title":"Book"}]}
-                                """)
+            {"author":{"firstName":"Ada","lastName":"Lovelace"},
+             "books":[{"isbn":"0306406152","title":"Book"}]}
+            """)
         .exchange()
         .expectStatus()
         .isEqualTo(409);
+  }
+
+  @Test
+  void registerAuthorWithBooksMapsPublicationFailure() {
+    when(saveAuthorWithBooksUseCase.saveAuthorWithBooks(any(), anyList()))
+        .thenThrow(
+            new BookEventPublicationException("Kafka unavailable", new IllegalStateException()));
+
+    client
+        .post()
+        .uri("/api/v1/authors/with-books")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(
+            """
+            {"author":{"firstName":"Ada","lastName":"Lovelace"},
+             "books":[{"isbn":"0306406152","title":"Book"}]}
+            """)
+        .exchange()
+        .expectStatus()
+        .isEqualTo(503);
   }
 
   @Test

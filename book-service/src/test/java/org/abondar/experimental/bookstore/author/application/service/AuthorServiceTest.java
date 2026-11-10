@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -23,8 +24,10 @@ import org.abondar.experimental.bookstore.author.application.port.in.UpdateAutho
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorCacheRepository;
 import org.abondar.experimental.bookstore.author.application.port.out.AuthorRepository;
 import org.abondar.experimental.bookstore.author.domain.Author;
+import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
+import org.abondar.experimental.bookstore.book.application.port.out.BookEventRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -52,6 +55,8 @@ public class AuthorServiceTest {
   @Mock private AuthorCacheRepository authorCacheRepository;
 
   @Mock private BookCacheRepository bookCacheRepository;
+
+  @Mock private BookEventRepository bookEventRepository;
 
   @InjectMocks private AuthorService authorService;
 
@@ -125,6 +130,7 @@ public class AuthorServiceTest {
     verify(bookRepository).saveMany(booksCaptor.capture());
     verify(bookCacheRepository).deleteByIds(List.of(firstBook.getId(), secondBook.getId()));
     verify(bookCacheRepository).saveMany(booksCaptor.getValue());
+    verify(bookEventRepository).sendManyUpserts(List.of(firstSavedBook, secondSavedBook));
     var savedBooks = booksCaptor.getValue();
     assertAll(
         () -> assertEquals(List.of(), firstBook.getAuthorIds()),
@@ -148,13 +154,14 @@ public class AuthorServiceTest {
 
     authorService.saveAuthorWithBooks(author, List.of(book));
 
-    verifyNoInteractions(authorCacheRepository, bookCacheRepository);
+    verifyNoInteractions(authorCacheRepository, bookCacheRepository, bookEventRepository);
     TransactionSynchronizationManager.getSynchronizations()
         .forEach(TransactionSynchronization::afterCommit);
 
     verify(authorCacheRepository).save(author);
     verify(bookCacheRepository).deleteByIds(List.of(book.getId()));
     verify(bookCacheRepository).saveMany(List.of(book.withAuthor(author.getId())));
+    verify(bookEventRepository).sendManyUpserts(List.of(book.withAuthor(author.getId())));
   }
 
   @Test
@@ -186,6 +193,7 @@ public class AuthorServiceTest {
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<Book>> cachedBooks = ArgumentCaptor.forClass(List.class);
     verify(bookCacheRepository).saveMany(cachedBooks.capture());
+    verify(bookEventRepository).sendManyUpserts(cachedBooks.getValue());
     assertEquals(
         List.of(existingAuthorId, author.getId()),
         cachedBooks.getValue().getFirst().getAuthorIds());
@@ -198,13 +206,54 @@ public class AuthorServiceTest {
 
     authorService.saveAuthorWithBooks(author, List.of(book));
 
-    verifyNoInteractions(authorCacheRepository, bookCacheRepository);
+    verifyNoInteractions(authorCacheRepository, bookCacheRepository, bookEventRepository);
     TransactionSynchronizationManager.getSynchronizations()
         .forEach(
             synchronization ->
                 synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
 
-    verifyNoInteractions(authorCacheRepository, bookCacheRepository);
+    verifyNoInteractions(authorCacheRepository, bookCacheRepository, bookEventRepository);
+  }
+
+  @Test
+  public void saveAuthorWithBooksDoesNotPublishWhenPersistenceFails() {
+    var author = author();
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(), null);
+    var failure = new IllegalStateException("Database unavailable");
+    doThrow(failure).when(bookRepository).saveMany(anyList());
+
+    assertSame(
+        failure,
+        assertThrows(
+            IllegalStateException.class,
+            () -> authorService.saveAuthorWithBooks(author, List.of(book))));
+
+    assertTrue(TransactionSynchronizationManager.getSynchronizations().isEmpty());
+    verifyNoInteractions(bookEventRepository);
+  }
+
+  @Test
+  public void saveAuthorWithBooksPropagatesPublicationFailureAfterCommit() {
+    var author = author();
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(), null);
+    var savedBooks = List.of(book.withAuthor(author.getId()));
+    when(bookRepository.findByAuthor(author.getId())).thenReturn(savedBooks);
+    var failure =
+        new BookEventPublicationException("Kafka unavailable", new IllegalStateException());
+    doThrow(failure).when(bookEventRepository).sendManyUpserts(savedBooks);
+
+    authorService.saveAuthorWithBooks(author, List.of(book));
+    verifyNoInteractions(bookEventRepository);
+
+    assertSame(
+        failure,
+        assertThrows(
+            BookEventPublicationException.class,
+            () ->
+                TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit)));
+    verify(authorRepository).save(author);
+    verify(bookRepository).saveMany(anyList());
   }
 
   @Test
