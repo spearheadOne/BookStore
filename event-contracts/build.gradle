@@ -1,0 +1,49 @@
+plugins {
+    id 'java-library'
+}
+
+def avroVersion = '1.12.2'
+
+group = rootProject.group
+version = rootProject.version
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+configurations {
+    avroTools
+}
+
+dependencies {
+    api "org.apache.avro:avro:${avroVersion}"
+    avroTools "org.apache.avro:avro-tools:${avroVersion}"
+}
+
+def schemaDir = layout.projectDirectory.dir('src/main/avro')
+def generatedDir = layout.buildDirectory.dir('generated-src/avro/main')
+
+
+tasks.register('generateAvro', JavaExec) {
+    classpath = configurations.avroTools
+    mainClass = 'org.apache.avro.tool.Main'
+
+    inputs.files(schemaDir.asFileTree.matching { include '*.avsc' }).skipWhenEmpty()
+    outputs.dir(generatedDir)
+
+    args 'compile', '-string', 'schema',
+            schemaDir.asFile.absolutePath,
+            generatedDir.get().asFile.absolutePath
+}
+
+sourceSets.main.java.srcDir(generatedDir)
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('generateAvro')
+}

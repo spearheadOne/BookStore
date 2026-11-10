@@ -1,2 +1,3 @@
 rootProject.name = 'BookStore'
 include 'book-service'
+include 'event-contracts'

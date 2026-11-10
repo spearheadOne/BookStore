@@ -1,0 +1,37 @@
+{
+  "type": "record",
+  "name": "CatalogUpserted",
+  "namespace": "org.abondar.experimental.bookstore.events.avro",
+  "doc": "Snapshot of a catalog’s searchable metadata after creation or rename.",
+  "fields": [
+    {
+      "name": "eventId",
+      "doc": "Unique identifier of this event. Reuse it on publication retries so consumers can detect duplicates.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    },
+    {
+      "name": "occurredAt",
+      "doc": "Persisted update time of the catalog snapshot, in UTC with millisecond precision.",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    },
+    {
+      "name": "catalogId",
+      "doc": "Identifier of the catalog in Bookstore. Used as the Kafka key for catalog events.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    },
+    {
+      "name": "name",
+      "doc": "Current name of the catalog.",
+      "type": "string"
+    }
+  ]
+}
