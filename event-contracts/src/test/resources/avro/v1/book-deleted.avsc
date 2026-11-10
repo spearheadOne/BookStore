@@ -1,0 +1,32 @@
+{
+  "type": "record",
+  "name": "BookDeleted",
+  "namespace": "org.abondar.experimental.bookstore.events.avro",
+  "doc": "Signals that a book and its search entries should be removed.",
+  "fields": [
+    {
+      "name": "eventId",
+      "doc": "Unique identifier of this event. Reuse it on publication retries so consumers can detect duplicates.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    },
+    {
+      "name": "occurredAt",
+      "doc": "Time the book deletion completed, in UTC with millisecond precision.",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    },
+    {
+      "name": "bookId",
+      "doc": "Identifier of the book in Bookstore. Used as the Kafka key for book events.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    }
+  ]
+}

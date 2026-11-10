@@ -1,0 +1,70 @@
+{
+  "type": "record",
+  "name": "BookContentAvailable",
+  "namespace": "org.abondar.experimental.bookstore.events.avro",
+  "doc": "Signals that the current file for a book format is available to read after an upload or replacement.",
+  "fields": [
+    {
+      "name": "eventId",
+      "doc": "Unique identifier of this event. Reuse it on publication retries so consumers can detect duplicates.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    },
+    {
+      "name": "occurredAt",
+      "doc": "Time the file upload or replacement completed, in UTC with millisecond precision.",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    },
+    {
+      "name": "bookId",
+      "doc": "Identifier of the book in Bookstore. Used as the Kafka key for book events.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    },
+    {
+      "name": "format",
+      "doc": "Format of the stored copy. Each book can have one current copy in each format.",
+      "type": {
+        "type": "enum",
+        "name": "BookContentFormat",
+        "doc": "The book file formats supported by Bookstore.",
+        "symbols": [
+          "epub",
+          "rtf",
+          "pdf"
+        ]
+      }
+    },
+    {
+      "name": "storageKey",
+      "doc": "S3 object key within the configured bucket, in the form <bookId>/<format>/file.<format>. The key points to the current copy.",
+      "type": "string"
+    },
+    {
+      "name": "contentType",
+      "doc": "Media type of the uploaded file, such as application/pdf.",
+      "type": "string"
+    },
+    {
+      "name": "originalFilename",
+      "doc": "Filename supplied on upload, or null when no filename was supplied.",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "sizeBytes",
+      "doc": "Size of the uploaded file in bytes.",
+      "type": "long"
+    }
+  ]
+}

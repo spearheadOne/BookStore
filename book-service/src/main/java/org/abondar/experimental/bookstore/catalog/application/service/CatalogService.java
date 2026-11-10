@@ -13,6 +13,7 @@ import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalog
 import org.abondar.experimental.bookstore.catalog.application.port.in.SaveCatalogUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.in.UpdateCatalogNameUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogCacheRepository;
+import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogEventRepository;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogRepository;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.catalog.domain.CatalogWithBooks;
@@ -36,6 +37,8 @@ public class CatalogService
 
   private final CatalogCacheRepository catalogCacheRepository;
 
+  private final CatalogEventRepository catalogEventRepository;
+
   @Override
   public void saveCatalog(Catalog catalog) {
     var exists = catalogRepository.findByName(catalog.getName().value());
@@ -46,6 +49,7 @@ public class CatalogService
     catalogRepository.save(catalog);
     log.debug("Registered catalog {}", catalog.getId().value());
     catalogCacheRepository.save(catalog);
+    catalogEventRepository.sendCatalogUpserted(catalog);
   }
 
   @Override
@@ -67,6 +71,7 @@ public class CatalogService
     catalogRepository.update(updated);
     log.debug("Renamed catalog {}", catalogId.value());
     catalogCacheRepository.save(updated);
+    catalogEventRepository.sendCatalogUpserted(updated);
 
     return updated;
   }
@@ -95,5 +100,6 @@ public class CatalogService
     catalogRepository.delete(catalogId);
     log.debug("Processed deletion of catalog {}", catalogId.value());
     catalogCacheRepository.delete(catalogId);
+    catalogEventRepository.sendCatalogDeleted(catalogId);
   }
 }

@@ -29,6 +29,11 @@ spring:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/bookstore}
           audiences:
             - book-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
 
 
 management:
@@ -69,6 +74,9 @@ store:
     book-ttl: ${BOOK_CACHE_TTL:30s}
     author-ttl: ${AUTHOR_ID_CACHE_TTL:30s}
     catalog-ttl: ${CATALOG_TTL:30s}
+  topic:
+    book-topic: ${BOOK_TOPIC:bookstore.book-events}
+    catalog-topic: ${CATALOG_TOPIC:bookstore.catalog-events}
 
 s3:
   bucket: ${BOOK_S3_BUCKET:book-store}

@@ -21,6 +21,7 @@ import org.abondar.experimental.bookstore.book.application.exception.BookNotFoun
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookContentUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
+import org.abondar.experimental.bookstore.book.application.port.out.BookEventRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -39,6 +40,7 @@ public class BookServiceTest {
   @Mock private BookRepository bookRepository;
 
   @Mock private BookCacheRepository bookCacheRepository;
+  @Mock private BookEventRepository bookEventRepository;
 
   @Mock private DeleteBookContentUseCase deleteBookContentUseCase;
 
@@ -51,9 +53,10 @@ public class BookServiceTest {
     when(bookRepository.findByIsbn(book.getIsbn())).thenReturn(Optional.empty());
     bookService.registerBook(book);
 
-    var writes = inOrder(bookRepository, bookCacheRepository);
+    var writes = inOrder(bookRepository, bookCacheRepository, bookEventRepository);
     writes.verify(bookRepository).save(book);
     writes.verify(bookCacheRepository).save(book);
+    writes.verify(bookEventRepository).sendBookUpsert(book);
   }
 
   @Test
@@ -67,7 +70,7 @@ public class BookServiceTest {
 
     assertTrue(exception.getMessage().contains("already exists"));
     verify(bookRepository, never()).save(book);
-    verifyNoInteractions(bookCacheRepository);
+    verifyNoInteractions(bookCacheRepository, bookEventRepository);
   }
 
   @Test
@@ -136,9 +139,10 @@ public class BookServiceTest {
     assertEquals(existingBook.getAuthorIds(), updated.getAuthorIds());
     assertEquals(existingBook.getCreatedAt(), updated.getCreatedAt());
     assertTrue(!updated.getUpdatedAt().isBefore(existingBook.getUpdatedAt()));
-    var writes = inOrder(bookRepository, bookCacheRepository);
+    var writes = inOrder(bookRepository, bookCacheRepository, bookEventRepository);
     writes.verify(bookRepository).update(updated);
     writes.verify(bookCacheRepository).save(updated);
+    writes.verify(bookEventRepository).sendBookUpsert(updated);
   }
 
   @Test
@@ -161,7 +165,7 @@ public class BookServiceTest {
 
     assertTrue(exception.getMessage().contains("does not exist"));
     verify(bookRepository, never()).update(any(Book.class));
-    verifyNoInteractions(bookCacheRepository);
+    verifyNoInteractions(bookCacheRepository, bookEventRepository);
   }
 
   @Test
@@ -175,7 +179,7 @@ public class BookServiceTest {
     doThrow(new BookNotFoundException(book.getId())).when(bookRepository).update(any(Book.class));
 
     assertThrows(BookNotFoundException.class, () -> bookService.updateBook(command));
-    verifyNoInteractions(bookCacheRepository);
+    verifyNoInteractions(bookCacheRepository, bookEventRepository);
   }
 
   @Test
@@ -184,10 +188,12 @@ public class BookServiceTest {
     lockBook(id);
     bookService.deleteBook(id);
 
-    var writes = inOrder(deleteBookContentUseCase, bookRepository, bookCacheRepository);
+    var writes =
+        inOrder(deleteBookContentUseCase, bookRepository, bookCacheRepository, bookEventRepository);
     writes.verify(deleteBookContentUseCase).deleteBookContent(id.value());
     writes.verify(bookRepository).delete(id);
     writes.verify(bookCacheRepository).delete(id);
+    writes.verify(bookEventRepository).sendBookDeleted(id);
   }
 
   @Test
@@ -201,7 +207,7 @@ public class BookServiceTest {
         failure, assertThrows(IllegalStateException.class, () -> bookService.deleteBook(id)));
 
     verify(bookRepository, never()).delete(id);
-    verifyNoInteractions(bookCacheRepository);
+    verifyNoInteractions(bookCacheRepository, bookEventRepository);
   }
 
   @Test
@@ -213,6 +219,28 @@ public class BookServiceTest {
     assertThrows(BookNotFoundException.class, () -> bookService.deleteBook(id));
 
     verify(bookCacheRepository, never()).delete(id);
+    verifyNoInteractions(bookEventRepository);
+  }
+
+  @Test
+  public void registerDoesNotPublishWhenPersistenceFails() {
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(), null);
+    doThrow(new BookAlreadyExistsException(book.getIsbn())).when(bookRepository).save(book);
+
+    assertThrows(BookAlreadyExistsException.class, () -> bookService.registerBook(book));
+
+    verifyNoInteractions(bookEventRepository, bookCacheRepository);
+  }
+
+  @Test
+  public void repeatedDeletePublishesDeletionWhenTheRowIsAlreadyAbsent() {
+    Id<Book> id = Id.generate();
+
+    bookService.deleteBook(id);
+
+    verify(bookEventRepository).sendBookDeleted(id);
+    verify(bookCacheRepository).delete(id);
+    verifyNoInteractions(deleteBookContentUseCase);
   }
 
   private void lockBook(Id<Book> id) {

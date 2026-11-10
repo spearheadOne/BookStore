@@ -1,0 +1,32 @@
+{
+  "type": "record",
+  "name": "CatalogDeleted",
+  "namespace": "org.abondar.experimental.bookstore.events.avro",
+  "doc": "Signals that the catalog association should be removed from search results while preserving the books.",
+  "fields": [
+    {
+      "name": "eventId",
+      "doc": "Unique identifier of this event. Reuse it on publication retries so consumers can detect duplicates.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    },
+    {
+      "name": "occurredAt",
+      "doc": "Time the catalog deletion completed, in UTC with millisecond precision.",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    },
+    {
+      "name": "catalogId",
+      "doc": "Identifier of the catalog in Bookstore. Used as the Kafka key for catalog events.",
+      "type": {
+        "type": "string",
+        "logicalType": "uuid"
+      }
+    }
+  ]
+}

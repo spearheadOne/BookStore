@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -22,9 +24,11 @@ import java.util.UUID;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.abondar.experimental.bookstore.book.application.exception.BookContentStorageException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.DownloadedBookContent;
 import org.abondar.experimental.bookstore.book.application.port.out.BookContentRepository;
+import org.abondar.experimental.bookstore.book.application.port.out.BookEventRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
@@ -42,6 +46,7 @@ class BookContentServiceTest {
 
   @Mock private BookContentRepository storageRepository;
   @Mock private BookRepository bookRepository;
+  @Mock private BookEventRepository eventRepository;
   @InjectMocks private BookContentService service;
 
   @ParameterizedTest
@@ -73,13 +78,18 @@ class BookContentServiceTest {
 
     service.uploadBookContent(id, new ByteArrayInputStream(bytes), format, filename, bytes.length);
 
-    verify(storageRepository)
+    var writes = inOrder(storageRepository, eventRepository);
+    writes
+        .verify(storageRepository)
         .uploadBookContent(
             eq(key),
             any(InputStream.class),
             eq(filename),
             eq((long) bytes.length),
             eq(contentType));
+    writes
+        .verify(eventRepository)
+        .sendBookContentAvailable(bookId, format, key, contentType, filename, bytes.length);
   }
 
   @ParameterizedTest
@@ -97,7 +107,7 @@ class BookContentServiceTest {
                 "fake." + format,
                 bytes.length));
 
-    verifyNoInteractions(bookRepository, storageRepository);
+    verifyNoInteractions(bookRepository, storageRepository, eventRepository);
   }
 
   @Test
@@ -114,7 +124,7 @@ class BookContentServiceTest {
                 "fake.epub",
                 bytes.length));
 
-    verifyNoInteractions(bookRepository, storageRepository);
+    verifyNoInteractions(bookRepository, storageRepository, eventRepository);
   }
 
   @Test
@@ -130,7 +140,7 @@ class BookContentServiceTest {
             service.uploadBookContent(
                 id, new ByteArrayInputStream(bytes), "pdf", "my-book.pdf", bytes.length));
 
-    verifyNoInteractions(storageRepository);
+    verifyNoInteractions(storageRepository, eventRepository);
   }
 
   @Test
@@ -163,7 +173,7 @@ class BookContentServiceTest {
         () -> service.uploadBookContent(id, content, "docx", "my-book.docx", 1));
     assertThrows(IllegalArgumentException.class, () -> service.downloadBookContent(id, "docx"));
 
-    verifyNoInteractions(storageRepository);
+    verifyNoInteractions(storageRepository, eventRepository);
   }
 
   @Test
@@ -175,6 +185,37 @@ class BookContentServiceTest {
     verify(storageRepository)
         .deleteBookContent(
             List.of(id + "/pdf/file.pdf", id + "/epub/file.epub", id + "/rtf/file.rtf"));
+    verifyNoInteractions(eventRepository);
+  }
+
+  @Test
+  void uploadDoesNotPublishWhenStorageFails() throws IOException {
+    var id = UUID.randomUUID();
+    var bytes = validContent("pdf");
+    var failure = new BookContentStorageException("Storage unavailable");
+    when(bookRepository.withBookLocked(eq(new Id<Book>(id)), any(Runnable.class)))
+        .thenAnswer(
+            invocation -> {
+              invocation.<Runnable>getArgument(1).run();
+              return true;
+            });
+    doThrow(failure)
+        .when(storageRepository)
+        .uploadBookContent(
+            eq(id + "/pdf/file.pdf"),
+            any(InputStream.class),
+            eq("book.pdf"),
+            eq((long) bytes.length),
+            eq("application/pdf"));
+
+    assertSame(
+        failure,
+        assertThrows(
+            BookContentStorageException.class,
+            () ->
+                service.uploadBookContent(
+                    id, new ByteArrayInputStream(bytes), "pdf", "book.pdf", bytes.length)));
+    verifyNoInteractions(eventRepository);
   }
 
   private static byte[] validContent(String format) throws IOException {

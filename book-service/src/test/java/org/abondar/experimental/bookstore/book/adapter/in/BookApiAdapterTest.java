@@ -29,6 +29,7 @@ import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookContentStorageException;
+import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.DownloadBookUseCase;
@@ -486,6 +487,25 @@ class BookApiAdapterTest {
     client
         .get()
         .uri("/api/v1/books/{id}/content?format=pdf", id)
+        .exchange()
+        .expectStatus()
+        .isEqualTo(503);
+  }
+
+  @Test
+  void registerReturnsServiceUnavailableWhenEventPublicationFails() {
+    doThrow(new BookEventPublicationException("Publication failed", new IllegalStateException()))
+        .when(registerBookUseCase)
+        .registerBook(any(Book.class));
+
+    client
+        .post()
+        .uri("/api/v1/books")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(
+            """
+            {"isbn":"0306406152","title":"Book"}
+            """)
         .exchange()
         .expectStatus()
         .isEqualTo(503);

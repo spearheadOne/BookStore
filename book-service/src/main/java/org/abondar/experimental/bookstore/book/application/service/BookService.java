@@ -13,6 +13,7 @@ import org.abondar.experimental.bookstore.book.application.port.in.RegisterBookU
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookCommand;
 import org.abondar.experimental.bookstore.book.application.port.in.UpdateBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
+import org.abondar.experimental.bookstore.book.application.port.out.BookEventRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
@@ -27,6 +28,7 @@ public class BookService
   private final BookRepository bookRepository;
   private final BookCacheRepository bookCacheRepository;
   private final DeleteBookContentUseCase deleteBookContentUseCase;
+  private final BookEventRepository bookEventRepository;
 
   @Override
   public void registerBook(Book book) {
@@ -36,6 +38,7 @@ public class BookService
       bookRepository.save(book);
       log.debug("Registered book {}", book.getId().value());
       bookCacheRepository.save(book);
+      bookEventRepository.sendBookUpsert(book);
     } else {
       throw new BookAlreadyExistsException(book.getIsbn());
     }
@@ -74,6 +77,7 @@ public class BookService
     bookRepository.update(updated);
     log.debug("Updated book {}", command.id().value());
     bookCacheRepository.save(updated);
+    bookEventRepository.sendBookUpsert(updated);
     return updated;
   }
 
@@ -92,5 +96,6 @@ public class BookService
       log.debug("Book {} was already absent during deletion", id.value());
     }
     bookCacheRepository.delete(id);
+    bookEventRepository.sendBookDeleted(id);
   }
 }

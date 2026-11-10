@@ -22,8 +22,12 @@ configurations {
 }
 
 dependencies {
-    api "org.apache.avro:avro:${avroVersion}"
-    avroTools "org.apache.avro:avro-tools:${avroVersion}"
+    api("org.apache.avro:avro:${avroVersion}")
+    avroTools("org.apache.avro:avro-tools:${avroVersion}")
+
+    testImplementation(platform("org.junit:junit-bom:6.0.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 def schemaDir = layout.projectDirectory.dir('src/main/avro')
@@ -46,4 +50,8 @@ sourceSets.main.java.srcDir(generatedDir)
 
 tasks.named('compileJava') {
     dependsOn tasks.named('generateAvro')
+}
+
+tasks.named("test") {
+    useJUnitPlatform()
 }

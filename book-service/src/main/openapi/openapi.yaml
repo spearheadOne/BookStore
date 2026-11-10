@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Bookstore API
-  version: 1.2.0
+  version: 1.2.3
 security:
   - bearerAuth: [ ]
 paths:
@@ -31,6 +31,8 @@ paths:
           description: Invalid book data
         '409':
           description: ISBN already exists
+        '503':
+          description: Event publication is temporarily unavailable
 
   /api/v1/books/{id}:
     parameters:
@@ -85,6 +87,8 @@ paths:
           description: Book not found
         '409':
           description: ISBN already exists
+        '503':
+          description: Event publication is temporarily unavailable
     delete:
       tags: [ Book ]
       operationId: deleteBook
@@ -97,7 +101,7 @@ paths:
         '204':
           description: Book deleted
         '503':
-          description: Content storage is temporarily unavailable
+          description: Content storage or event publication is temporarily unavailable
 
   /api/v1/books/{id}/content:
     parameters:
@@ -138,7 +142,7 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '503':
-          description: Content storage is temporarily unavailable
+          description: Content storage or event publication is temporarily unavailable
     get:
       tags: [ Book ]
       operationId: downloadBookContent
@@ -259,6 +263,8 @@ paths:
           description: Invalid author or book data, including an empty books array
         '409':
           description: Author or book already exists
+        '503':
+          description: Book event publication failed after registration; data may already be committed
 
   /api/v1/authors/{id}:
     parameters:
@@ -402,6 +408,8 @@ paths:
           description: Invalid catalog data
         '409':
           description: Catalog name already exists
+        '503':
+          description: Event publication is temporarily unavailable
 
   /api/v1/catalogs/{id}:
     parameters:
@@ -441,6 +449,8 @@ paths:
           description: Catalog deleted
         '409':
           description: Catalog still has books
+        '503':
+          description: Event publication is temporarily unavailable
 
   /api/v1/catalogs/{id}/rename:
     parameters:
@@ -477,6 +487,8 @@ paths:
           description: Catalog not found
         '409':
           description: Catalog name already exists
+        '503':
+          description: Event publication is temporarily unavailable
 
   /api/v1/catalogs/{id}/books:
     parameters:

@@ -51,6 +51,8 @@ configure(serviceProjects) {
         implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
         implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
         implementation("io.github.resilience4j:resilience4j-spring-boot4:2.4.0")
+        implementation("org.springframework.boot:spring-boot-starter-kafka")
+        implementation(project(":event-contracts"))
 
         compileOnly("org.projectlombok:lombok")
         annotationProcessor("org.projectlombok:lombok")
@@ -115,7 +117,8 @@ configure(serviceProjects) {
 
 tasks.named("build") {
     dependsOn(
-            ":book-service:build"
+            ":book-service:build",
+            ":event-contracts:build"
     )
 }
 
@@ -123,6 +126,7 @@ tasks.register("test") {
     group = "verification"
     description = "Runs tests for all Gradle subprojects."
     dependsOn(
-            ":book-service:test"
+            ":book-service:test",
+            ":event-contracts:test"
     )
 }

@@ -4,6 +4,7 @@ import java.time.DateTimeException;
 import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookContentStorageException;
+import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,12 @@ public class BookApiExceptionHandler {
   @ExceptionHandler(BookContentStorageException.class)
   public ResponseEntity<Void> storageUnavailable(BookContentStorageException exception) {
     log.error("Book content storage operation failed", exception);
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+  }
+
+  @ExceptionHandler(BookEventPublicationException.class)
+  public ResponseEntity<Void> eventPublicationUnavailable(BookEventPublicationException exception) {
+    log.error("Book event publication failed", exception);
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
   }
 

@@ -17,6 +17,7 @@ import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogAlreadyExistsException;
+import org.abondar.experimental.bookstore.catalog.application.exception.CatalogEventPublicationException;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
 import org.abondar.experimental.bookstore.catalog.application.port.in.DeleteCatalogUseCase;
 import org.abondar.experimental.bookstore.catalog.application.port.in.GetCatalogUseCase;
@@ -305,6 +306,55 @@ class CatalogApiAdapterTest {
         .deleteCatalog(new Id<Catalog>(id));
 
     client.delete().uri("/api/v1/catalogs/{id}", id).exchange().expectStatus().isEqualTo(409);
+  }
+
+  @Test
+  void registerReturnsServiceUnavailableWhenPublicationFails() {
+    doThrow(new CatalogEventPublicationException("Publication failed", new IllegalStateException()))
+        .when(saveCatalogUseCase)
+        .saveCatalog(any(Catalog.class));
+
+    client
+        .post()
+        .uri("/api/v1/catalogs")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body("{\"name\":\"Catalog\"}")
+        .exchange()
+        .expectStatus()
+        .isEqualTo(503);
+  }
+
+  @Test
+  void renameReturnsServiceUnavailableWhenPublicationFails() {
+    var id = new Id<Catalog>(UUID.randomUUID());
+    when(updateCatalogNameUseCase.updateCatalogName(id, "New name"))
+        .thenThrow(
+            new CatalogEventPublicationException(
+                "Publication failed", new IllegalStateException()));
+
+    client
+        .post()
+        .uri("/api/v1/catalogs/{id}/rename", id.value())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body("{\"name\":\"New name\"}")
+        .exchange()
+        .expectStatus()
+        .isEqualTo(503);
+  }
+
+  @Test
+  void deleteReturnsServiceUnavailableWhenPublicationFails() {
+    var id = new Id<Catalog>(UUID.randomUUID());
+    doThrow(new CatalogEventPublicationException("Publication failed", new IllegalStateException()))
+        .when(deleteCatalogUseCase)
+        .deleteCatalog(id);
+
+    client
+        .delete()
+        .uri("/api/v1/catalogs/{id}", id.value())
+        .exchange()
+        .expectStatus()
+        .isEqualTo(503);
   }
 
   private Catalog catalog() {

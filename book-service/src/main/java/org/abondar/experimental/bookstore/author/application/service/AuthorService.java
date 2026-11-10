@@ -24,6 +24,7 @@ import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.author.domain.AuthorWithBooks;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookCacheRepository;
+import org.abondar.experimental.bookstore.book.application.port.out.BookEventRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
@@ -52,6 +53,8 @@ public class AuthorService
   private final AuthorCacheRepository authorCacheRepository;
 
   private final BookCacheRepository bookCacheRepository;
+
+  private final BookEventRepository bookEventRepository;
 
   @Override
   public void saveAuthor(Author author) {
@@ -91,6 +94,7 @@ public class AuthorService
             authorCacheRepository.save(author);
             bookCacheRepository.deleteByIds(bookIds);
             bookCacheRepository.saveMany(savedBooks);
+            bookEventRepository.sendManyUpserts(savedBooks);
           }
         });
 

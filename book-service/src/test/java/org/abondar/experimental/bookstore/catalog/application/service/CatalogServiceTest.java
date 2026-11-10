@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -20,6 +22,7 @@ import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogAlreadyExistsException;
 import org.abondar.experimental.bookstore.catalog.application.exception.CatalogNotFoundException;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogCacheRepository;
+import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogEventRepository;
 import org.abondar.experimental.bookstore.catalog.application.port.out.CatalogRepository;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
 import org.abondar.experimental.bookstore.common.Id;
@@ -39,6 +42,7 @@ public class CatalogServiceTest {
   @Mock private BookRepository bookRepository;
 
   @Mock private CatalogCacheRepository catalogCacheRepository;
+  @Mock private CatalogEventRepository catalogEventRepository;
 
   @InjectMocks private CatalogService catalogService;
 
@@ -48,8 +52,10 @@ public class CatalogServiceTest {
 
     catalogService.saveCatalog(catalog);
 
-    verify(catalogRepository).save(catalog);
-    verify(catalogCacheRepository).save(catalog);
+    var writes = inOrder(catalogRepository, catalogCacheRepository, catalogEventRepository);
+    writes.verify(catalogRepository).save(catalog);
+    writes.verify(catalogCacheRepository).save(catalog);
+    writes.verify(catalogEventRepository).sendCatalogUpserted(catalog);
   }
 
   @Test
@@ -60,6 +66,7 @@ public class CatalogServiceTest {
     assertThrows(CatalogAlreadyExistsException.class, () -> catalogService.saveCatalog(catalog));
 
     verify(catalogRepository, never()).save(catalog);
+    verifyNoInteractions(catalogEventRepository);
   }
 
   @Test
@@ -72,6 +79,7 @@ public class CatalogServiceTest {
     var saved = ArgumentCaptor.forClass(Catalog.class);
     verify(catalogRepository).update(saved.capture());
     verify(catalogCacheRepository).save(result);
+    verify(catalogEventRepository).sendCatalogUpserted(result);
     assertAll(
         () -> assertSame(saved.getValue(), result),
         () -> assertEquals(catalog.getId(), saved.getValue().getId()),
@@ -103,6 +111,7 @@ public class CatalogServiceTest {
         () -> catalogService.updateCatalogName(catalog.getId(), other.getName().value()));
 
     verify(catalogRepository, never()).update(any(Catalog.class));
+    verifyNoInteractions(catalogEventRepository);
   }
 
   @Test
@@ -113,6 +122,7 @@ public class CatalogServiceTest {
         CatalogNotFoundException.class, () -> catalogService.updateCatalogName(id, "New name"));
 
     verify(catalogRepository, never()).update(any(Catalog.class));
+    verifyNoInteractions(catalogEventRepository);
   }
 
   @Test
@@ -122,6 +132,7 @@ public class CatalogServiceTest {
 
     assertSame(catalog, catalogService.getCatalog(catalog.getId()).orElseThrow());
     verify(catalogCacheRepository).save(catalog);
+    verifyNoInteractions(catalogEventRepository);
   }
 
   @Test
@@ -131,7 +142,7 @@ public class CatalogServiceTest {
 
     assertSame(catalog, catalogService.getCatalog(catalog.getId()).orElseThrow());
 
-    verifyNoInteractions(catalogRepository);
+    verifyNoInteractions(catalogRepository, catalogEventRepository);
   }
 
   @Test
@@ -139,6 +150,7 @@ public class CatalogServiceTest {
     Id<Catalog> id = Id.generate();
 
     assertTrue(catalogService.getCatalog(id).isEmpty());
+    verifyNoInteractions(catalogEventRepository);
   }
 
   @Test
@@ -156,6 +168,7 @@ public class CatalogServiceTest {
         () -> assertSame(catalog, found.catalog()),
         () -> assertEquals(List.of(book), found.books()));
     verify(catalogCacheRepository).save(catalog);
+    verifyNoInteractions(catalogEventRepository);
   }
 
   @Test
@@ -168,7 +181,7 @@ public class CatalogServiceTest {
 
     assertSame(catalog, result.catalog());
     assertTrue(result.books().isEmpty());
-    verifyNoInteractions(catalogRepository);
+    verifyNoInteractions(catalogRepository, catalogEventRepository);
   }
 
   @Test
@@ -176,7 +189,7 @@ public class CatalogServiceTest {
     Id<Catalog> id = Id.generate();
 
     assertTrue(catalogService.getCatalogWithBooks(id).isEmpty());
-    verifyNoInteractions(bookRepository);
+    verifyNoInteractions(bookRepository, catalogEventRepository);
   }
 
   @Test
@@ -185,7 +198,42 @@ public class CatalogServiceTest {
 
     catalogService.deleteCatalog(id);
 
-    verify(catalogRepository).delete(id);
-    verify(catalogCacheRepository).delete(id);
+    var writes = inOrder(catalogRepository, catalogCacheRepository, catalogEventRepository);
+    writes.verify(catalogRepository).delete(id);
+    writes.verify(catalogCacheRepository).delete(id);
+    writes.verify(catalogEventRepository).sendCatalogDeleted(id);
+  }
+
+  @Test
+  public void failedSaveDoesNotPublish() {
+    var catalog = Catalog.create(new Text("Catalog"));
+    doThrow(new CatalogAlreadyExistsException("Catalog")).when(catalogRepository).save(catalog);
+
+    assertThrows(CatalogAlreadyExistsException.class, () -> catalogService.saveCatalog(catalog));
+
+    verifyNoInteractions(catalogEventRepository, catalogCacheRepository);
+  }
+
+  @Test
+  public void failedUpdateDoesNotPublish() {
+    var catalog = Catalog.create(new Text("Catalog"));
+    when(catalogRepository.findById(catalog.getId())).thenReturn(Optional.of(catalog));
+    doThrow(new CatalogNotFoundException()).when(catalogRepository).update(any(Catalog.class));
+
+    assertThrows(
+        CatalogNotFoundException.class,
+        () -> catalogService.updateCatalogName(catalog.getId(), "New"));
+
+    verifyNoInteractions(catalogEventRepository, catalogCacheRepository);
+  }
+
+  @Test
+  public void failedDeleteDoesNotPublish() {
+    Id<Catalog> id = Id.generate();
+    doThrow(new CatalogNotFoundException()).when(catalogRepository).delete(id);
+
+    assertThrows(CatalogNotFoundException.class, () -> catalogService.deleteCatalog(id));
+
+    verifyNoInteractions(catalogEventRepository, catalogCacheRepository);
   }
 }

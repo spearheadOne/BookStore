@@ -19,6 +19,7 @@ import org.abondar.experimental.bookstore.book.application.port.in.DownloadBookU
 import org.abondar.experimental.bookstore.book.application.port.in.DownloadedBookContent;
 import org.abondar.experimental.bookstore.book.application.port.in.UploadBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.out.BookContentRepository;
+import org.abondar.experimental.bookstore.book.application.port.out.BookEventRepository;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
@@ -35,6 +36,7 @@ public class BookContentService
 
   private final BookContentRepository storageRepository;
   private final BookRepository bookRepository;
+  private final BookEventRepository eventRepository;
 
   @Override
   public Optional<DownloadedBookContent> downloadBookContent(UUID id, String format) {
@@ -52,12 +54,16 @@ public class BookContentService
     var bookFormat = BookFormat.parse(format);
     var bookId = new Id<Book>(id);
     var content = validateHeader(file, bookFormat);
+    var key = bookFormat.key(id);
     boolean exists =
         bookRepository.withBookLocked(
             bookId,
-            () ->
-                storageRepository.uploadBookContent(
-                    bookFormat.key(id), content, originalFilename, size, bookFormat.contentType));
+            () -> {
+              storageRepository.uploadBookContent(
+                  key, content, originalFilename, size, bookFormat.contentType);
+              eventRepository.sendBookContentAvailable(
+                  bookId, format, key, bookFormat.contentType, originalFilename, size);
+            });
     if (!exists) {
       throw new BookNotFoundException(bookId);
     }
@@ -117,16 +123,16 @@ public class BookContentService
       this.contentType = contentType;
     }
 
-    private String key(UUID id) {
-      var extension = name().toLowerCase(Locale.ROOT);
-      return id + "/" + extension + "/file." + extension;
-    }
-
     private static BookFormat parse(String format) {
       if (format == null) {
         throw new IllegalArgumentException("Book format is required");
       }
       return valueOf(format.toUpperCase(Locale.ROOT));
+    }
+
+    private String key(UUID id) {
+      var extension = name().toLowerCase(Locale.ROOT);
+      return id + "/" + extension + "/file." + extension;
     }
   }
 }
