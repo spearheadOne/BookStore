@@ -10,7 +10,8 @@ group "org.abondar.experimental.bookstore"
 version "0.0.1"
 
 def serviceProjects = [
-        project(":book-service")
+        project(":book-service"),
+        project(":search-service")
 ]
 
 configure(serviceProjects) {
@@ -118,6 +119,7 @@ configure(serviceProjects) {
 tasks.named("build") {
     dependsOn(
             ":book-service:build",
+            ":search-service:build",
             ":event-contracts:build"
     )
 }
@@ -127,6 +129,7 @@ tasks.register("test") {
     description = "Runs tests for all Gradle subprojects."
     dependsOn(
             ":book-service:test",
+            ":search-service:test",
             ":event-contracts:test"
     )
 }

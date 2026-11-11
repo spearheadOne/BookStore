@@ -1,0 +1,13 @@
+// Match the HTTP transport versions required by the OpenSearch Java client.
+ext["httpclient5.version"] = "5.6.4"
+ext["httpcore5.version"] = "5.4.3"
+
+dependencies {
+    implementation("org.opensearch.client:opensearch-java:3.10.0")
+
+    constraints {
+        add("implementation", "org.eclipse.parsson:parsson:1.1.8") {
+            because("Fix CVE-2026-9563 in the OpenSearch client's transitive JSON parser")
+        }
+    }
+}

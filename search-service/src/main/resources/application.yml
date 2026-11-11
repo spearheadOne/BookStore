@@ -1,0 +1,9 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+opensearch:
+  url: ${OPENSEARCH_URL:http://localhost:9200}
+  username: ${OPENSEARCH_USERNAME:}
+  password: ${OPENSEARCH_PASSWORD:}
+  connect-timeout: ${OPENSEARCH_CONNECT_TIMEOUT:1s}
+  response-timeout: ${OPENSEARCH_RESPONSE_TIMEOUT:10s}
