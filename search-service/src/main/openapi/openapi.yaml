@@ -1,12 +1,48 @@
 openapi: 3.0.3
 info:
   title: Bookstore Search API
-  version: 1.0.0
+  version: 1.1.1
+
+tags:
+  - name: Index
+    description: Internal administration of the configured search indexes
 
 paths:
-  /test:
-    get:
-      summary: Test endpoint
+  /internal/api/v1/indexes:
+    post:
+      tags: [ Index ]
+      operationId: createIndexes
+      summary: Create the configured search indexes
+      description: >-
+        Creates missing
+        service-managed indexes using their configured mappings and settings.
+        Existing indexes are preserved; this operation does not replace mappings
+        or populate documents. Index names are resolved from service configuration.
+        Internal endpoint; do not expose through public gateway routes.
       responses:
-        '200':
-          description: OK
+        '201':
+          description: All configured indexes created
+        '503':
+          $ref: '#/components/responses/IndexOperationUnavailable'
+    delete:
+      tags: [ Index ]
+      operationId: deleteIndexes
+      summary: Delete the configured search indexes
+      description: >-
+        Deletes all configured
+        service-managed indexes and their indexed documents. Missing indexes are
+        treated as already deleted. Stored book metadata and content in Bookstore
+        are unaffected. Internal endpoint; do not expose through public gateway routes.
+      responses:
+        '204':
+          description: All configured indexes are absent
+        '503':
+          $ref: '#/components/responses/IndexOperationUnavailable'
+
+components:
+  responses:
+    IndexOperationUnavailable:
+      description: >-
+        OpenSearch could not complete the operation. Changes to multiple indexes
+        are not atomic; some indexes may already have been created or deleted.
+        The operation can be retried.

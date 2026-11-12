@@ -7,3 +7,8 @@ opensearch:
   password: ${OPENSEARCH_PASSWORD:}
   connect-timeout: ${OPENSEARCH_CONNECT_TIMEOUT:1s}
   response-timeout: ${OPENSEARCH_RESPONSE_TIMEOUT:10s}
+  book-metadata-index: ${OPENSEARCH_BOOK_INDEX:book-metadata}
+  book-content-index: ${OPENSEARCH_BOOK_CONTENT_INDEX:book-content}
+  catalog-index: ${OPENSEARCH_CATALOG_INDEX:catalog}
+  shards: ${OPENSEARCH_SHARDS:1}
+  replicas: ${OPENSEARCH_REPLICAS:0}
