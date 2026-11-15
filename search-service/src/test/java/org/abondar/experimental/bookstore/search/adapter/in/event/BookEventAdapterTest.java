@@ -16,6 +16,8 @@ import org.abondar.experimental.bookstore.events.avro.BookContentAvailable;
 import org.abondar.experimental.bookstore.events.avro.BookContentFormat;
 import org.abondar.experimental.bookstore.events.avro.BookDeleted;
 import org.abondar.experimental.bookstore.events.avro.BookMetadataUpserted;
+import org.abondar.experimental.bookstore.search.adapter.in.event.book.BookDecoder;
+import org.abondar.experimental.bookstore.search.adapter.in.event.book.BookEventAdapter;
 import org.abondar.experimental.bookstore.search.adapter.out.OpenSearchAdapter;
 import org.abondar.experimental.bookstore.search.application.service.BookMetadataService;
 import org.abondar.experimental.bookstore.search.config.KafkaConfig;

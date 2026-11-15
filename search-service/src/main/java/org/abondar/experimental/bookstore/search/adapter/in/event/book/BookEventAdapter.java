@@ -1,4 +1,4 @@
-package org.abondar.experimental.bookstore.search.adapter.in.event;
+package org.abondar.experimental.bookstore.search.adapter.in.event.book;
 
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
