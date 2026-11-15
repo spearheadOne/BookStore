@@ -1,12 +1,15 @@
 package org.abondar.experimental.bookstore.search.adapter.out;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.search.application.exception.IndexCreationFailedException;
 import org.abondar.experimental.bookstore.search.application.exception.IndexDeletionFailedException;
+import org.abondar.experimental.bookstore.search.application.port.out.BookMetadataRepository;
 import org.abondar.experimental.bookstore.search.application.port.out.IndexRepository;
 import org.abondar.experimental.bookstore.search.config.OpenSearchProperties;
+import org.abondar.experimental.bookstore.search.domain.BookMetadata;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
@@ -15,7 +18,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class OpenSearchAdapter implements IndexRepository {
+public class OpenSearchAdapter implements IndexRepository, BookMetadataRepository {
 
   private final OpenSearchProperties properties;
   private final OpenSearchClient client;
@@ -107,6 +110,31 @@ public class OpenSearchAdapter implements IndexRepository {
       log.debug("Deleted configured indexes {}", properties.getIndexNames());
     } catch (IOException | OpenSearchException exception) {
       throw new IndexDeletionFailedException(exception);
+    }
+  }
+
+  @Override
+  public void deleteBook(String bookId) {
+    try {
+      client.delete(request -> request.index(properties.bookMetadataIndex()).id(bookId));
+
+      // todo: add deletion from content index
+    } catch (IOException exception) {
+      throw new UncheckedIOException("Could not delete book " + bookId, exception);
+    }
+  }
+
+  @Override
+  public void addBookMetadata(BookMetadata bookMetadata) {
+    try {
+      client.index(
+          request ->
+              request
+                  .index(properties.bookMetadataIndex())
+                  .id(bookMetadata.bookId())
+                  .document(bookMetadata));
+    } catch (IOException exception) {
+      throw new UncheckedIOException("Could not index book " + bookMetadata.bookId(), exception);
     }
   }
 }

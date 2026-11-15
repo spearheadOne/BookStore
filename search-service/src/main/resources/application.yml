@@ -1,6 +1,21 @@
 server:
   port: ${SERVER_PORT:8082}
 
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:book-search}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      auto-offset-reset: earliest
+
 opensearch:
   url: ${OPENSEARCH_URL:http://localhost:9200}
   username: ${OPENSEARCH_USERNAME:}
@@ -12,3 +27,11 @@ opensearch:
   catalog-index: ${OPENSEARCH_CATALOG_INDEX:catalog}
   shards: ${OPENSEARCH_SHARDS:1}
   replicas: ${OPENSEARCH_REPLICAS:0}
+
+
+topic:
+  book-topic: ${BOOK_TOPIC:bookstore.book-events}
+  catalog-topic: ${CATALOG_TOPIC:bookstore.catalog-events}
+  dlt-prefix: ${DLT_PREFIX:.DLT}
+  backoff-interval: ${BACKOFF_INTERVAL:1000}
+  max-attempts: ${MAX_ATTEMPTS:3}

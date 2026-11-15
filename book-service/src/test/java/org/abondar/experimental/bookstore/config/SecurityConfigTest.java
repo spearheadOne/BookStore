@@ -106,6 +106,10 @@ class SecurityConfigTest {
   static void jwtProperties(DynamicPropertyRegistry registry) {
     registry.add(
         "spring.security.oauth2.resourceserver.jwt.issuer-uri", SecurityConfigTest::issuer);
+    registry.add(
+        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
+        () -> issuer() + "/protocol/openid-connect/certs");
+    registry.add("spring.security.oauth2.resourceserver.jwt.audiences", () -> "book-service");
   }
 
   private static String issuer() {

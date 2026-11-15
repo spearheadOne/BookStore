@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Map;
@@ -15,11 +16,13 @@ import org.abondar.experimental.bookstore.search.application.exception.IndexCrea
 import org.abondar.experimental.bookstore.search.application.exception.IndexDeletionFailedException;
 import org.abondar.experimental.bookstore.search.config.OpenSearchConfig;
 import org.abondar.experimental.bookstore.search.config.OpenSearchProperties;
+import org.abondar.experimental.bookstore.search.domain.BookMetadata;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.mapping.Property;
 import org.opensearch.client.transport.OpenSearchTransport;
 import org.testcontainers.containers.GenericContainer;
@@ -71,6 +74,90 @@ class OpenSearchAdapterTest {
     adapter.createIndexes();
     for (var index : properties.getIndexNames()) {
       assertTrue(client.indices().exists(request -> request.index(index)).value());
+    }
+  }
+
+  @Test
+  void savesAndFindsBookMetadata() throws IOException {
+    adapter.createIndexes();
+    var book = metadata("Description", UUID.randomUUID().toString());
+
+    adapter.addBookMetadata(book);
+
+    assertEquals(book, findMetadata(book.bookId()));
+  }
+
+  @Test
+  void replacesExistingMetadataAndClearsOptionalFields() throws IOException {
+    adapter.createIndexes();
+    var original = metadata("Original description", UUID.randomUUID().toString());
+    adapter.addBookMetadata(original);
+    var updated = new BookMetadata(original.bookId(), "9780134685991", "Updated title", null, null);
+
+    adapter.addBookMetadata(updated);
+
+    assertEquals(updated, findMetadata(original.bookId()));
+  }
+
+  @Test
+  void duplicateUpsertKeepsOneDocument() throws IOException {
+    adapter.createIndexes();
+    var book = metadata(null, null);
+
+    adapter.addBookMetadata(book);
+    adapter.addBookMetadata(book);
+
+    client.indices().refresh(request -> request.index(properties.bookMetadataIndex()));
+    assertEquals(
+        1L, client.count(request -> request.index(properties.bookMetadataIndex())).count());
+    assertEquals(book, findMetadata(book.bookId()));
+  }
+
+  @Test
+  void deletesBookMetadataAndAllowsRepeatedDeletion() throws IOException {
+    adapter.createIndexes();
+    var book = metadata(null, null);
+    var other = metadata("Keep this book", null);
+    adapter.addBookMetadata(book);
+    adapter.addBookMetadata(other);
+
+    adapter.deleteBook(book.bookId());
+    adapter.deleteBook(book.bookId());
+
+    assertFalse(
+        client
+            .get(
+                request -> request.index(properties.bookMetadataIndex()).id(book.bookId()),
+                BookMetadata.class)
+            .found());
+    assertEquals(other, findMetadata(other.bookId()));
+  }
+
+  @Test
+  void missingIndexDeletionRemainsAnError() {
+    assertThrows(OpenSearchException.class, () -> adapter.deleteBook(UUID.randomUUID().toString()));
+  }
+
+  @Test
+  void metadataConnectionFailuresKeepTheirCauses() throws IOException {
+    try (var server = new ServerSocket(0);
+        var unavailableTransport =
+            new OpenSearchConfig()
+                .openSearchTransport(
+                    properties("http://localhost:" + server.getLocalPort(), "unavailable"))) {
+      var unavailable =
+          new OpenSearchAdapter(properties, new OpenSearchClient(unavailableTransport));
+      var book = metadata(null, null);
+
+      var upsert =
+          assertThrows(UncheckedIOException.class, () -> unavailable.addBookMetadata(book));
+      var deletion =
+          assertThrows(UncheckedIOException.class, () -> unavailable.deleteBook(book.bookId()));
+
+      assertNotNull(upsert.getCause());
+      assertNotNull(deletion.getCause());
+      assertTrue(upsert.getMessage().contains(book.bookId()));
+      assertTrue(deletion.getMessage().contains(book.bookId()));
     }
   }
 
@@ -231,6 +318,20 @@ class OpenSearchAdapterTest {
         .get(index)
         .mappings()
         .properties();
+  }
+
+  private BookMetadata findMetadata(String bookId) throws IOException {
+    var result =
+        client.get(
+            request -> request.index(properties.bookMetadataIndex()).id(bookId),
+            BookMetadata.class);
+    assertTrue(result.found());
+    return result.source();
+  }
+
+  private BookMetadata metadata(String description, String catalogId) {
+    return new BookMetadata(
+        UUID.randomUUID().toString(), "0306406152", "Book", description, catalogId);
   }
 
   private static String endpoint() {

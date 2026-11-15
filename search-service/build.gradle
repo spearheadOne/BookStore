@@ -4,6 +4,7 @@ ext["httpcore5.version"] = "5.4.3"
 
 dependencies {
     implementation("org.opensearch.client:opensearch-java:3.10.0")
+    testImplementation("org.testcontainers:testcontainers-kafka")
 
     constraints {
         add("implementation", "org.eclipse.parsson:parsson:1.1.8") {
