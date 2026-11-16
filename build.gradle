@@ -93,7 +93,9 @@ configure(serviceProjects) {
                 openApiNullable      : "false",
                 useBeanValidation: "true",
                 useTags         : "true",
-                generateBuilders: "true"
+                generateBuilders                  : "true",
+                generateJsonIncludeAnnotations    : "false",
+                generateJsonSetterNullsAnnotations: "false"
         ])
         globalProperties.set([
                 apis           : "",

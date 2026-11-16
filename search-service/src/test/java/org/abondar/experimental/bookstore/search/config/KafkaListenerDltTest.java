@@ -25,10 +25,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.abondar.experimental.bookstore.events.avro.BookMetadataUpserted;
-import org.abondar.experimental.bookstore.search.adapter.in.event.book.BookDecoder;
-import org.abondar.experimental.bookstore.search.adapter.in.event.book.BookEventAdapter;
-import org.abondar.experimental.bookstore.search.application.port.in.AddBookMetadataUseCase;
-import org.abondar.experimental.bookstore.search.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookDecoder;
+import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookEventAdapter;
+import org.abondar.experimental.bookstore.search.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookMetadataUseCase;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -68,7 +68,7 @@ class KafkaListenerDltTest {
   private AnnotationConfigApplicationContext context;
   private Admin admin;
   private KafkaTemplate<String, byte[]> template;
-  private AddBookMetadataUseCase upsert;
+  private UpsertBookMetadataUseCase upsert;
   private DeleteBookUseCase delete;
   private String topic;
   private String dlt;
@@ -85,7 +85,7 @@ class KafkaListenerDltTest {
     recoveryFailed = new CountDownLatch(1);
     admin = Admin.create(Map.of("bootstrap.servers", kafka.getBootstrapServers()));
     createTopic(topic);
-    upsert = mock(AddBookMetadataUseCase.class);
+    upsert = mock(UpsertBookMetadataUseCase.class);
     delete = mock(DeleteBookUseCase.class);
 
     context = new AnnotationConfigApplicationContext();
@@ -121,7 +121,7 @@ class KafkaListenerDltTest {
                     Map.entry("spring.kafka.producer.properties.delivery.timeout.ms", "1500"))));
     context.registerBean(
         TopicProperties.class, () -> new TopicProperties(topic, "unused", ".DLT", 25L, 3L));
-    context.registerBean(AddBookMetadataUseCase.class, () -> upsert);
+    context.registerBean(UpsertBookMetadataUseCase.class, () -> upsert);
     context.registerBean(DeleteBookUseCase.class, () -> delete);
     context.register(TestConfig.class);
     context.refresh();
