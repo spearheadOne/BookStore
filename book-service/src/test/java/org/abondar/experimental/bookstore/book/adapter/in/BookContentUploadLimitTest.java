@@ -49,7 +49,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
       RegisterBookUseCase.class,
       UpdateBookUseCase.class,
       DeleteBookUseCase.class,
-      DownloadBookUseCase.class
+      DownloadBookUseCase.class,
+      BookEpubUploadValidator.class
     })
 class BookContentUploadLimitTest {
 

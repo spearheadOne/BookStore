@@ -4,7 +4,9 @@ import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.search.adapter.in.event.BaseEventAdapter;
 import org.abondar.experimental.bookstore.search.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookContentUseCase;
 import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookMetadataUseCase;
+import org.abondar.experimental.bookstore.search.book.domain.BookContent;
 import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,8 @@ import org.springframework.stereotype.Component;
 public class BookEventAdapter extends BaseEventAdapter {
 
   private final UpsertBookMetadataUseCase upsertBookMetadataUseCase;
+
+  private final UpsertBookContentUseCase upsertBookContentUseCase;
 
   private final DeleteBookUseCase deleteBookUseCase;
 
@@ -42,11 +46,20 @@ public class BookEventAdapter extends BaseEventAdapter {
 
         upsertBookMetadataUseCase.upsertBookMetadata(book);
       }
-      case "BookDeleted" -> {
-        deleteBookUseCase.deleteBook(bookId);
-      }
+      case "BookDeleted" -> deleteBookUseCase.deleteBook(bookId);
       case "BookContentAvailable" -> {
-        // todo implement later in next card
+        var format = genericRecord.get("format").toString();
+        var storageKey = genericRecord.get("storageKey").toString();
+        var contentType = genericRecord.get("contentType").toString();
+        var originalFileName =
+            genericRecord.get("originalFilename") == null
+                ? null
+                : genericRecord.get("originalFilename").toString();
+        var sizeBytes = Long.parseLong(genericRecord.get("sizeBytes").toString());
+        var bookContent =
+            new BookContent(bookId, format, storageKey, contentType, originalFileName, sizeBytes);
+
+        upsertBookContentUseCase.upsertBookContent(bookContent);
       }
       default -> throw new IllegalArgumentException("Unsupported book event");
     }

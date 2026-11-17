@@ -24,11 +24,17 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.abondar.experimental.bookstore.events.avro.BookContentAvailable;
+import org.abondar.experimental.bookstore.events.avro.BookContentFormat;
 import org.abondar.experimental.bookstore.events.avro.BookMetadataUpserted;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookDecoder;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookEventAdapter;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.ContentEventException;
 import org.abondar.experimental.bookstore.search.book.application.port.in.DeleteBookUseCase;
+import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookContentUseCase;
 import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookMetadataUseCase;
+import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogEventException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -37,10 +43,12 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.tika.exception.TikaException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.opensearch.client.opensearch._types.ErrorResponse;
 import org.opensearch.client.opensearch._types.OpenSearchException;
@@ -70,6 +78,7 @@ class KafkaListenerDltTest {
   private KafkaTemplate<String, byte[]> template;
   private UpsertBookMetadataUseCase upsert;
   private DeleteBookUseCase delete;
+  private UpsertBookContentUseCase contentUpsert;
   private String topic;
   private String dlt;
   private String group;
@@ -87,6 +96,7 @@ class KafkaListenerDltTest {
     createTopic(topic);
     upsert = mock(UpsertBookMetadataUseCase.class);
     delete = mock(DeleteBookUseCase.class);
+    contentUpsert = mock(UpsertBookContentUseCase.class);
 
     context = new AnnotationConfigApplicationContext();
     context
@@ -123,6 +133,7 @@ class KafkaListenerDltTest {
         TopicProperties.class, () -> new TopicProperties(topic, "unused", ".DLT", 25L, 3L));
     context.registerBean(UpsertBookMetadataUseCase.class, () -> upsert);
     context.registerBean(DeleteBookUseCase.class, () -> delete);
+    context.registerBean(UpsertBookContentUseCase.class, () -> contentUpsert);
     context.register(TestConfig.class);
     context.refresh();
     @SuppressWarnings("unchecked")
@@ -202,6 +213,88 @@ class KafkaListenerDltTest {
 
     verify(upsert).upsertBookMetadata(any());
     assertEquals(List.of(1), attempts);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"book", "catalog"})
+  void eventExceptionRetriesThenSucceeds(String kind) throws Exception {
+    createTopic(dlt);
+    RuntimeException failure =
+        kind.equals("book")
+            ? new BookEventException("Temporary failure", new IOException("Disconnected"))
+            : new CatalogEventException("Temporary failure", new IOException("Disconnected"));
+    doThrow(failure).doNothing().when(upsert).upsertBookMetadata(any());
+    var offset = send(metadata());
+    awaitCommitted(offset);
+    verify(upsert, times(2)).upsertBookMetadata(any());
+    assertEquals(List.of(1), attempts);
+    try (var consumer = dltConsumer()) {
+      assertTrue(consumer.poll(Duration.ofMillis(500)).isEmpty());
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"book,400", "book,503", "catalog,400", "catalog,503"})
+  void wrappedOpenSearchFailureRetainsStatusPolicy(String kind, int status) throws Exception {
+    createTopic(dlt);
+    RuntimeException failure =
+        kind.equals("book")
+            ? new BookEventException("Indexing failed", openSearchFailure(status))
+            : new CatalogEventException("Indexing failed", openSearchFailure(status));
+    doThrow(failure).when(upsert).upsertBookMetadata(any());
+    var payload = metadata();
+    var offset = send(payload);
+    assertDlt(payload);
+    awaitCommitted(offset);
+    int deliveries = status == 400 ? 1 : 4;
+    verify(upsert, times(deliveries)).upsertBookMetadata(any());
+    assertEquals(status == 400 ? List.of(1) : List.of(1, 2, 3, 4), attempts);
+  }
+
+  @Test
+  void invalidContentGoesDirectlyToDlt() throws Exception {
+    createTopic(dlt);
+    doThrow(new ContentEventException("Invalid document", new TikaException("Corrupt PDF")))
+        .when(contentUpsert)
+        .upsertBookContent(any());
+    var payload = content();
+    var offset = send(payload);
+    assertDlt(payload);
+    awaitCommitted(offset);
+    verify(contentUpsert).upsertBookContent(any());
+    assertEquals(List.of(1), attempts);
+  }
+
+  @Test
+  void transientContentFailureRetriesThenPublishesDlt() throws Exception {
+    createTopic(dlt);
+    doThrow(new BookEventException("S3 unavailable", new IOException("Disconnected")))
+        .when(contentUpsert)
+        .upsertBookContent(any());
+    var payload = content();
+    var offset = send(payload);
+    assertDlt(payload);
+    awaitCommitted(offset);
+    verify(contentUpsert, times(4)).upsertBookContent(any());
+    assertEquals(List.of(1, 2, 3, 4), attempts);
+  }
+
+  private byte[] content() throws IOException {
+    var id = UUID.randomUUID();
+    var event =
+        new BookContentAvailable(
+            UUID.randomUUID(),
+            Instant.now(),
+            id,
+            BookContentFormat.pdf,
+            id + "/pdf/file.pdf",
+            "application/pdf",
+            null,
+            100L);
+    var buffer = event.toByteBuffer();
+    var payload = new byte[buffer.remaining()];
+    buffer.get(payload);
+    return payload;
   }
 
   @Test

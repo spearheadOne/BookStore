@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -25,6 +26,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.zip.ZipException;
 import org.abondar.experimental.bookstore.adapter.in.generated.bookservice.model.BookResponse;
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
@@ -75,6 +77,8 @@ class BookApiAdapterTest {
 
   @Mock private DownloadBookUseCase downloadBookUseCase;
 
+  @Mock private BookEpubUploadValidator epubUploadValidator;
+
   private MockMvc mockMvc;
   private RestTestClient client;
 
@@ -90,7 +94,8 @@ class BookApiAdapterTest {
                     updateBookUseCase,
                     deleteBookUseCase,
                     uploadBookUseCase,
-                    downloadBookUseCase))
+                    downloadBookUseCase,
+                    epubUploadValidator))
             .setControllerAdvice(new BookApiExceptionHandler())
             .setConversionService(conversionService)
             .build();
@@ -389,12 +394,14 @@ class BookApiAdapterTest {
     verify(deleteBookUseCase).deleteBook(new Id<>(id));
   }
 
-  @Test
-  void uploadPassesFileAndMetadataToUseCase() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"pdf", "rtf"})
+  void uploadPassesFileAndMetadataToUseCase(String format) throws Exception {
     var book = existingBook();
     var id = book.getId().value();
     var bytes = new byte[] {1, 2, 3};
-    var file = new MockMultipartFile("file", "my-book.pdf", "application/pdf", bytes);
+    var filename = "my-book." + format;
+    var file = new MockMultipartFile("file", filename, "application/" + format, bytes);
     when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
     doAnswer(
             invocation -> {
@@ -403,31 +410,34 @@ class BookApiAdapterTest {
               return null;
             })
         .when(uploadBookUseCase)
-        .uploadBookContent(eq(id), any(InputStream.class), eq("pdf"), eq("my-book.pdf"), eq(3L));
+        .uploadBookContent(eq(id), any(InputStream.class), eq(format), eq(filename), eq(3L));
 
     mockMvc
-        .perform(multipart("/api/v1/books/{id}/content", id).file(file).param("format", "pdf"))
+        .perform(multipart("/api/v1/books/{id}/content", id).file(file).param("format", format))
         .andExpect(status().isNoContent());
 
     verify(uploadBookUseCase)
-        .uploadBookContent(eq(id), any(InputStream.class), eq("pdf"), eq("my-book.pdf"), eq(3L));
+        .uploadBookContent(eq(id), any(InputStream.class), eq(format), eq(filename), eq(3L));
+    verifyNoInteractions(epubUploadValidator);
   }
 
-  @Test
-  void uploadRejectsMissingBook() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"pdf", "epub"})
+  void uploadRejectsMissingBook(String format) throws Exception {
     var id = UUID.randomUUID();
     when(getBookUseCase.getBook(new Id<>(id))).thenReturn(Optional.empty());
     var file = new MockMultipartFile("file", "my-book.pdf", "application/pdf", new byte[] {1});
 
     mockMvc
-        .perform(multipart("/api/v1/books/{id}/content", id).file(file).param("format", "pdf"))
+        .perform(multipart("/api/v1/books/{id}/content", id).file(file).param("format", format))
         .andExpect(status().isNotFound());
 
-    verifyNoInteractions(uploadBookUseCase);
+    verifyNoInteractions(uploadBookUseCase, epubUploadValidator);
   }
 
-  @Test
-  void uploadRejectsEmptyFile() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"pdf", "epub"})
+  void uploadRejectsEmptyFile(String format) throws Exception {
     var book = existingBook();
     when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
     var file = new MockMultipartFile("file", "my-book.pdf", "application/pdf", new byte[0]);
@@ -436,7 +446,77 @@ class BookApiAdapterTest {
         .perform(
             multipart("/api/v1/books/{id}/content", book.getId().value())
                 .file(file)
-                .param("format", "pdf"))
+                .param("format", format))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(uploadBookUseCase, epubUploadValidator);
+  }
+
+  @Test
+  void uploadValidatesEpubThenReopensTheCompleteFileForUpload() throws Exception {
+    var book = existingBook();
+    var id = book.getId().value();
+    var bytes = new byte[] {1, 2, 3};
+    var file = new MockMultipartFile("file", "book.epub", "application/epub+zip", bytes);
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    when(epubUploadValidator.isEpubValid(any(InputStream.class)))
+        .thenAnswer(
+            invocation -> {
+              try (InputStream stream = invocation.getArgument(0)) {
+                assertArrayEquals(bytes, stream.readAllBytes());
+              }
+              return true;
+            });
+    doAnswer(
+            invocation -> {
+              InputStream stream = invocation.getArgument(1);
+              assertArrayEquals(bytes, stream.readAllBytes());
+              return null;
+            })
+        .when(uploadBookUseCase)
+        .uploadBookContent(eq(id), any(InputStream.class), eq("epub"), eq("book.epub"), eq(3L));
+
+    mockMvc
+        .perform(multipart("/api/v1/books/{id}/content", id).file(file).param("format", "epub"))
+        .andExpect(status().isNoContent());
+
+    var order = inOrder(epubUploadValidator, uploadBookUseCase);
+    order.verify(epubUploadValidator).isEpubValid(any(InputStream.class));
+    order
+        .verify(uploadBookUseCase)
+        .uploadBookContent(eq(id), any(InputStream.class), eq("epub"), eq("book.epub"), eq(3L));
+  }
+
+  @Test
+  void uploadRejectsEpubLimitsBeforeCallingUploadUseCase() throws Exception {
+    var book = existingBook();
+    var file = new MockMultipartFile("file", "book.epub", "application/epub+zip", new byte[] {1});
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    when(epubUploadValidator.isEpubValid(any(InputStream.class))).thenReturn(false);
+
+    mockMvc
+        .perform(
+            multipart("/api/v1/books/{id}/content", book.getId().value())
+                .file(file)
+                .param("format", "epub"))
+        .andExpect(status().isPayloadTooLarge());
+
+    verifyNoInteractions(uploadBookUseCase);
+  }
+
+  @Test
+  void uploadRejectsMalformedEpubBeforeCallingUploadUseCase() throws Exception {
+    var book = existingBook();
+    var file = new MockMultipartFile("file", "book.epub", "application/epub+zip", new byte[] {1});
+    when(getBookUseCase.getBook(book.getId())).thenReturn(Optional.of(book));
+    when(epubUploadValidator.isEpubValid(any(InputStream.class)))
+        .thenThrow(new ZipException("Invalid compressed data"));
+
+    mockMvc
+        .perform(
+            multipart("/api/v1/books/{id}/content", book.getId().value())
+                .file(file)
+                .param("format", "epub"))
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(uploadBookUseCase);

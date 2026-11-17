@@ -46,6 +46,8 @@ public class BookApiAdapter implements BookApi {
   private final UploadBookUseCase uploadBookUseCase;
   private final DownloadBookUseCase downloadBookUseCase;
 
+  private final BookEpubUploadValidator epubUploadValidator;
+
   @Override
   public ResponseEntity<Void> deleteBook(UUID id) {
     deleteBookUseCase.deleteBook(new Id<>(id));
@@ -135,6 +137,18 @@ public class BookApiAdapter implements BookApi {
 
     if (file.isEmpty()) {
       return ResponseEntity.badRequest().build();
+    }
+
+    if (format == BookContentFormat.EPUB) {
+      try (var content = file.getInputStream()) {
+        var isValid = epubUploadValidator.isEpubValid(content);
+        if (!isValid) {
+          return ResponseEntity.status(413).build();
+        }
+      } catch (IOException e) {
+        log.debug("Could not validate epub book {} ({})", id, e.getClass().getSimpleName());
+        return ResponseEntity.badRequest().build();
+      }
     }
 
     try (var content = file.getInputStream()) {

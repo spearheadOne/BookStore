@@ -7,10 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.util.UUID;
 import org.abondar.experimental.bookstore.search.adapter.out.BaseOpenSearchAdapterTest;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
+import org.abondar.experimental.bookstore.search.book.domain.BookContentDocument;
 import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
 import org.abondar.experimental.bookstore.search.config.OpenSearchConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,9 +32,9 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
   void missingIndexIsRejectedWithoutCreatingDynamicMappings() throws IOException {
     var book = metadata("Description", null);
 
-    var failure = assertThrows(OpenSearchException.class, () -> adapter.upsertBookMetadata(book));
+    var failure = assertThrows(BookEventException.class, () -> adapter.upsertBookMetadata(book));
 
-    assertEquals(404, failure.status());
+    assertEquals(404, ((OpenSearchException) failure.getCause()).status());
     assertFalse(
         client.indices().exists(request -> request.index(properties.bookMetadataIndex())).value());
   }
@@ -96,7 +97,7 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
 
   @Test
   void missingIndexDeletionRemainsAnError() {
-    assertThrows(OpenSearchException.class, () -> adapter.deleteBook(UUID.randomUUID().toString()));
+    assertThrows(BookEventException.class, () -> adapter.deleteBook(UUID.randomUUID().toString()));
   }
 
   @Test
@@ -166,6 +167,91 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
   }
 
   @Test
+  void differentFormatsHaveIndependentContentDocuments() throws IOException {
+    indexAdapter.createIndexes();
+    var id = UUID.randomUUID().toString();
+    var pdf = new BookContentDocument(id, "pdf", "book.pdf", "PDF text");
+    var rtf = new BookContentDocument(id, "rtf", "book.rtf", "RTF text");
+    adapter.upsertBookContent(pdf);
+    adapter.upsertBookContent(rtf);
+
+    assertEquals(pdf, findContent(id, "pdf"));
+    assertEquals(rtf, findContent(id, "rtf"));
+    var raw =
+        client
+            .get(
+                request -> request.index(properties.bookContentIndex()).id(id + ":pdf"),
+                java.util.Map.class)
+            .source();
+    assertEquals("book.pdf", raw.get("originalFilename"));
+  }
+
+  @Test
+  void contentReplacementPreservesOtherFormatsAndMetadata() throws IOException {
+    indexAdapter.createIndexes();
+    var book = metadata("Description", null);
+    adapter.upsertBookMetadata(book);
+    var epub = new BookContentDocument(book.bookId(), "epub", "book.epub", "EPUB text");
+    adapter.upsertBookContent(epub);
+    adapter.upsertBookContent(new BookContentDocument(book.bookId(), "pdf", "old.pdf", "Old text"));
+    var replacement = new BookContentDocument(book.bookId(), "pdf", "new.pdf", "New text");
+
+    adapter.upsertBookContent(replacement);
+    adapter.upsertBookContent(replacement);
+
+    assertEquals(replacement, findContent(book.bookId(), "pdf"));
+    assertEquals(epub, findContent(book.bookId(), "epub"));
+    assertEquals(book, findMetadata(book.bookId()));
+    client.indices().refresh(request -> request.index(properties.bookContentIndex()));
+    assertEquals(2L, client.count(request -> request.index(properties.bookContentIndex())).count());
+  }
+
+  @Test
+  void bookDeletionRemovesEveryFormatAndPreservesOtherBooks() throws IOException {
+    indexAdapter.createIndexes();
+    var book = metadata("Delete", null);
+    var other = metadata("Keep", null);
+    adapter.upsertBookMetadata(book);
+    adapter.upsertBookMetadata(other);
+    for (var format : java.util.List.of("pdf", "rtf", "epub")) {
+      adapter.upsertBookContent(
+          new BookContentDocument(book.bookId(), format, "book." + format, "Deleted text"));
+      adapter.upsertBookContent(
+          new BookContentDocument(other.bookId(), format, "other." + format, "Keep text"));
+    }
+
+    adapter.deleteBook(book.bookId());
+    adapter.deleteBook(book.bookId());
+
+    for (var format : java.util.List.of("pdf", "rtf", "epub")) {
+      assertFalse(
+          client
+              .get(
+                  request ->
+                      request.index(properties.bookContentIndex()).id(book.bookId() + ":" + format),
+                  BookContentDocument.class)
+              .found());
+      assertEquals("Keep text", findContent(other.bookId(), format).content());
+    }
+    assertFalse(
+        client
+            .get(
+                request -> request.index(properties.bookMetadataIndex()).id(book.bookId()),
+                BookMetadata.class)
+            .found());
+    assertEquals(other, findMetadata(other.bookId()));
+  }
+
+  private BookContentDocument findContent(String id, String format) throws IOException {
+    var result =
+        client.get(
+            request -> request.index(properties.bookContentIndex()).id(id + ":" + format),
+            BookContentDocument.class);
+    assertTrue(result.found());
+    return result.source();
+  }
+
+  @Test
   void metadataConnectionFailuresKeepTheirCauses() throws IOException {
     try (var server = new ServerSocket(0);
         var unavailableTransport =
@@ -177,14 +263,21 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
       var book = metadata(null, null);
 
       var upsert =
-          assertThrows(UncheckedIOException.class, () -> unavailable.upsertBookMetadata(book));
+          assertThrows(BookEventException.class, () -> unavailable.upsertBookMetadata(book));
       var deletion =
-          assertThrows(UncheckedIOException.class, () -> unavailable.deleteBook(book.bookId()));
+          assertThrows(BookEventException.class, () -> unavailable.deleteBook(book.bookId()));
 
       var unlink =
-          assertThrows(UncheckedIOException.class, () -> unavailable.unlinkCatalogId("catalog-id"));
+          assertThrows(BookEventException.class, () -> unavailable.unlinkCatalogId("catalog-id"));
       assertNotNull(unlink.getCause());
       assertTrue(unlink.getMessage().contains("update documents"));
+      var content =
+          assertThrows(
+              BookEventException.class,
+              () ->
+                  unavailable.upsertBookContent(
+                      new BookContentDocument(book.bookId(), "pdf", "book.pdf", "Text")));
+      assertNotNull(content.getCause());
       assertNotNull(upsert.getCause());
       assertNotNull(deletion.getCause());
       assertTrue(upsert.getMessage().contains(book.bookId()));

@@ -81,6 +81,9 @@ resilience4j:
         timeout-duration: 0s
 
 store:
+  epub:
+    max-expanded-size-mb: ${EPUB_MAX_EXPANDED_SIZE:512}
+    max-zip-entries: ${EPUB_MAX_ZIP_ENTRIES:10000}
   cache:
     book-ttl: ${BOOK_CACHE_TTL:30s}
     author-ttl: ${AUTHOR_ID_CACHE_TTL:30s}

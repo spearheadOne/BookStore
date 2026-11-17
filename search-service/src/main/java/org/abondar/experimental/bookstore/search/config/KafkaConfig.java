@@ -1,5 +1,8 @@
 package org.abondar.experimental.bookstore.search.config;
 
+import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.ContentEventException;
+import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogEventException;
 import org.apache.avro.message.BadHeaderException;
 import org.apache.kafka.common.TopicPartition;
 import org.opensearch.client.opensearch._types.OpenSearchException;
@@ -25,7 +28,9 @@ public class KafkaConfig {
     recoverer.setFailIfSendResultIsError(true);
 
     var handler = new DefaultErrorHandler(recoverer);
-    handler.addNotRetryableExceptions(BadHeaderException.class, IllegalArgumentException.class);
+    handler.addRetryableExceptions(BookEventException.class, CatalogEventException.class);
+    handler.addNotRetryableExceptions(
+        BadHeaderException.class, IllegalArgumentException.class, ContentEventException.class);
     handler.setBackOffFunction(
         (record, ex) -> {
           for (Throwable t = ex; t != null; t = t.getCause()) {

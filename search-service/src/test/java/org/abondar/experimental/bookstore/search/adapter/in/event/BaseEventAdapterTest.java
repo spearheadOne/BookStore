@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.search.adapter.in.event;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import java.time.Duration;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookDecoder;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookEventAdapter;
 import org.abondar.experimental.bookstore.search.book.adapter.out.BookOpenSearchAdapter;
+import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookContentUseCase;
 import org.abondar.experimental.bookstore.search.book.application.service.BookMetadataService;
 import org.abondar.experimental.bookstore.search.catalog.adapter.in.event.CatalogDecoder;
 import org.abondar.experimental.bookstore.search.catalog.adapter.in.event.CatalogEventAdapter;
@@ -131,6 +133,8 @@ public abstract class BaseEventAdapterTest {
                 "test-book-content",
                 1,
                 0));
+    context.registerBean(
+        UpsertBookContentUseCase.class, () -> mock(UpsertBookContentUseCase.class));
     context.register(TestConfig.class);
     context.refresh();
     context.getBean(IndexOpenSearchAdapter.class).createIndexes();

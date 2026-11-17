@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Bookstore API
-  version: 1.2.3
+  version: 1.2.4
 security:
   - bearerAuth: [ ]
 paths:
@@ -120,6 +120,8 @@ paths:
         uploading an existing format replaces only that copy. The file must match
         the declared format. The configurable default limits are 100 MiB per file
         (104857600 bytes) and 110 MiB for the complete multipart request.
+        EPUB uploads are also validated before storage against configurable
+        limits on total uncompressed size and ZIP entry count.
       requestBody:
         required: true
         content:
@@ -130,13 +132,18 @@ paths:
         '204':
           description: Book content uploaded or replaced
         '400':
-          description: Invalid book ID, missing or empty file, missing or unsupported format, or file does not match the declared format
+          description: >-
+            Invalid book ID, missing or empty file, missing or unsupported format,
+            file does not match the declared format, or malformed ZIP/EPUB content
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           description: Book not found
         '413':
-          description: File or complete multipart request exceeds the configured size limit
+          description: >-
+            File or complete multipart request exceeds the configured size limit,
+            or EPUB content exceeds the configured total uncompressed size or
+            ZIP entry-count limit
         '415':
           description: Request content type is not multipart/form-data
         '429':

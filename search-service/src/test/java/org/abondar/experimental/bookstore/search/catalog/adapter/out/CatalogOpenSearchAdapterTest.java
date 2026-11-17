@@ -7,13 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.util.Map;
 import java.util.UUID;
 import org.abondar.experimental.bookstore.search.adapter.out.BaseOpenSearchAdapterTest;
 import org.abondar.experimental.bookstore.search.book.adapter.out.BookOpenSearchAdapter;
 import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
+import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogEventException;
 import org.abondar.experimental.bookstore.search.config.OpenSearchConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,9 +95,9 @@ class CatalogOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
 
       var upsert =
           assertThrows(
-              UncheckedIOException.class, () -> unavailable.upsertCatalog("id", "Catalog"));
+              CatalogEventException.class, () -> unavailable.upsertCatalog("id", "Catalog"));
       var deletion =
-          assertThrows(UncheckedIOException.class, () -> unavailable.deleteCatalog("id"));
+          assertThrows(CatalogEventException.class, () -> unavailable.deleteCatalog("id"));
 
       assertNotNull(upsert.getCause());
       assertNotNull(deletion.getCause());

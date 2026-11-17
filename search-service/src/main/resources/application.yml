@@ -1,6 +1,11 @@
 server:
   port: ${SERVER_PORT:8082}
 
+book:
+  content:
+    # Reject oversized extracted text; never index a silently truncated book.
+    max-extracted-characters: ${BOOK_CONTENT_MAX_EXTRACTED_CHARACTERS:10000000}
+
 spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -35,3 +40,11 @@ topic:
   dlt-prefix: ${DLT_PREFIX:.DLT}
   backoff-interval: ${BACKOFF_INTERVAL:1000}
   max-attempts: ${MAX_ATTEMPTS:3}
+
+s3:
+  endpoint: ${BOOK_S3_ENDPOINT:}
+  bucket: ${BOOK_S3_BUCKET:book-store}
+  region: ${BOOK_S3_REGION:us-east-1}
+  path-style: ${BOOK_S3_PATH_STYLE:false}
+  connect-timeout: ${BOOK_S3_CONNECT_TIMEOUT:1s}
+  request-timeout: ${BOOK_S3_REQUEST_TIMEOUT:2m}
