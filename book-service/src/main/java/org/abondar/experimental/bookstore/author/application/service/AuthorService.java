@@ -91,10 +91,10 @@ public class AuthorService
           public void afterCommit() {
             log.debug(
                 "Registered author {} with {} books", author.getId().value(), savedBooks.size());
+            bookEventRepository.sendManyUpserts(savedBooks);
             authorCacheRepository.save(author);
             bookCacheRepository.deleteByIds(bookIds);
             bookCacheRepository.saveMany(savedBooks);
-            bookEventRepository.sendManyUpserts(savedBooks);
           }
         });
 
@@ -137,10 +137,11 @@ public class AuthorService
   }
 
   @Override
+  @Transactional
   public Author updateAuthor(UpdateAuthorCommand authorCommand) {
     var existing =
         authorRepository
-            .findById(authorCommand.id())
+            .findByIdForUpdate(authorCommand.id())
             .orElseThrow(() -> new AuthorNotFoundException(authorCommand.id()));
 
     var now = Instant.now();
@@ -164,9 +165,21 @@ public class AuthorService
             existing.getCreatedAt(),
             now.isAfter(existing.getUpdatedAt()) ? now : existing.getUpdatedAt());
 
+    var duplicate =
+        authorRepository.findByNameAndDob(
+            updated.getFirstName(), updated.getLastName(), updated.getDateOfBirth());
+    if (duplicate.isPresent() && !duplicate.get().getId().equals(updated.getId())) {
+      throw new AuthorAlreadyExistsException();
+    }
     authorRepository.update(updated);
     log.debug("Updated author {}", authorCommand.id().value());
-    authorCacheRepository.save(updated);
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            authorCacheRepository.save(updated);
+          }
+        });
     return updated;
   }
 

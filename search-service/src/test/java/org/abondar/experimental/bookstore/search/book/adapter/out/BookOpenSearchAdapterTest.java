@@ -28,6 +28,17 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
   }
 
   @Test
+  void missingIndexIsRejectedWithoutCreatingDynamicMappings() throws IOException {
+    var book = metadata("Description", null);
+
+    var failure = assertThrows(OpenSearchException.class, () -> adapter.upsertBookMetadata(book));
+
+    assertEquals(404, failure.status());
+    assertFalse(
+        client.indices().exists(request -> request.index(properties.bookMetadataIndex())).value());
+  }
+
+  @Test
   void savesAndFindsBookMetadata() throws IOException {
     indexAdapter.createIndexes();
     var book = metadata("Description", UUID.randomUUID().toString());

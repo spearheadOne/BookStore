@@ -76,6 +76,16 @@ public class AuthorPersistenceAdapter implements AuthorRepository {
   }
 
   @Override
+  public Optional<Author> findByIdForUpdate(Id<Author> id) {
+    return dslContext
+        .selectFrom(AUTHOR)
+        .where(AUTHOR.ID.eq(id.value()))
+        .forUpdate()
+        .fetchOptional()
+        .map(this::toAuthor);
+  }
+
+  @Override
   public Optional<Author> findById(Id<Author> id) {
     return dslContext
         .selectFrom(AUTHOR)

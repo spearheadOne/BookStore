@@ -97,6 +97,7 @@ services:
     container_name: opensearch
     environment:
       - discovery.type=single-node
+      - action.auto_create_index=false
       - bootstrap.memory_lock=true
       - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
       - DISABLE_INSTALL_DEMO_CONFIG=true
@@ -108,11 +109,12 @@ services:
     ports:
       - "9200:9200"
       - "9600:9600"
-
-
+    volumes:
+      - book_store_opensearch_data:/usr/share/opensearch/data
 
 volumes:
   book_store_keycloak_data:
   book_store_postgres_data:
   book_store_seaweedfs_data:
   book_store_kafka_data:
+  book_store_opensearch_data:

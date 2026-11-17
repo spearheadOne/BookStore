@@ -18,6 +18,9 @@ import org.abondar.experimental.bookstore.book.application.port.out.BookReposito
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.common.Id;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Slf4j
 @Service
@@ -37,8 +40,8 @@ public class BookService
     if (!exists) {
       bookRepository.save(book);
       log.debug("Registered book {}", book.getId().value());
-      bookCacheRepository.save(book);
       bookEventRepository.sendBookUpsert(book);
+      bookCacheRepository.save(book);
     } else {
       throw new BookAlreadyExistsException(book.getIsbn());
     }
@@ -56,10 +59,11 @@ public class BookService
   }
 
   @Override
+  @Transactional
   public Book updateBook(UpdateBookCommand command) {
     var existing =
         bookRepository
-            .findById(command.id())
+            .findByIdForUpdate(command.id())
             .orElseThrow(() -> new BookNotFoundException(command.id()));
     var now = Instant.now();
     var updated =
@@ -76,8 +80,14 @@ public class BookService
 
     bookRepository.update(updated);
     log.debug("Updated book {}", command.id().value());
-    bookCacheRepository.save(updated);
-    bookEventRepository.sendBookUpsert(updated);
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            bookEventRepository.sendBookUpsert(updated);
+            bookCacheRepository.save(updated);
+          }
+        });
     return updated;
   }
 
@@ -95,7 +105,7 @@ public class BookService
     } else {
       log.debug("Book {} was already absent during deletion", id.value());
     }
-    bookCacheRepository.delete(id);
     bookEventRepository.sendBookDeleted(id);
+    bookCacheRepository.delete(id);
   }
 }

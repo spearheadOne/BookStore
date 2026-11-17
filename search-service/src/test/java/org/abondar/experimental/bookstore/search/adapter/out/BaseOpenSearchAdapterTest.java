@@ -23,6 +23,7 @@ public abstract class BaseOpenSearchAdapterTest {
   static final GenericContainer<?> opensearch =
       new GenericContainer<>("opensearchproject/opensearch:3.9.0")
           .withEnv("discovery.type", "single-node")
+          .withEnv("action.auto_create_index", "false")
           .withEnv("DISABLE_INSTALL_DEMO_CONFIG", "true")
           .withEnv("DISABLE_SECURITY_PLUGIN", "true")
           .withEnv("OPENSEARCH_JAVA_OPTS", "-Xms512m -Xmx512m")

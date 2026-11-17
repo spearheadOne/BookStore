@@ -19,6 +19,9 @@ public interface BookRepository {
 
   Optional<Book> findById(Id<Book> id);
 
+  /** Reads and locks the row until the caller's transaction completes. */
+  Optional<Book> findByIdForUpdate(Id<Book> id);
+
   List<Book> findByIds(List<Id<Book>> ids);
 
   Optional<Book> findByIsbn(Isbn isbn);

@@ -6,6 +6,7 @@ import org.abondar.experimental.bookstore.book.application.exception.BookAlready
 import org.abondar.experimental.bookstore.book.application.exception.BookContentStorageException;
 import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.exception.InvalidBookReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -39,7 +40,11 @@ public class BookApiExceptionHandler {
     return ResponseEntity.notFound().build();
   }
 
-  @ExceptionHandler({IllegalArgumentException.class, DateTimeException.class})
+  @ExceptionHandler({
+    IllegalArgumentException.class,
+    DateTimeException.class,
+    InvalidBookReferenceException.class
+  })
   public ResponseEntity<Void> invalidBook(RuntimeException exception) {
     log.debug("Rejected invalid book request ({})", exception.getClass().getSimpleName());
     return ResponseEntity.badRequest().build();

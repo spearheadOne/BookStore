@@ -27,12 +27,16 @@ import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 public class BookServiceTest {
@@ -46,6 +50,16 @@ public class BookServiceTest {
 
   @InjectMocks private BookService bookService;
 
+  @BeforeEach
+  void beginTransactionSynchronization() {
+    TransactionSynchronizationManager.initSynchronization();
+  }
+
+  @AfterEach
+  void endTransactionSynchronization() {
+    TransactionSynchronizationManager.clearSynchronization();
+  }
+
   @Test
   public void registerBook() {
     var book = Book.create(new Isbn("0306406152"), new Text("test"), null, null, List.of(), null);
@@ -55,8 +69,8 @@ public class BookServiceTest {
 
     var writes = inOrder(bookRepository, bookCacheRepository, bookEventRepository);
     writes.verify(bookRepository).save(book);
-    writes.verify(bookCacheRepository).save(book);
     writes.verify(bookEventRepository).sendBookUpsert(book);
+    writes.verify(bookCacheRepository).save(book);
   }
 
   @Test
@@ -123,9 +137,13 @@ public class BookServiceTest {
     var command =
         new UpdateBookCommand(
             existingBook.getId(), null, new Text("updated title"), null, null, null, null);
-    when(bookRepository.findById(existingBook.getId())).thenReturn(Optional.of(existingBook));
+    when(bookRepository.findByIdForUpdate(existingBook.getId()))
+        .thenReturn(Optional.of(existingBook));
 
     var result = bookService.updateBook(command);
+    verifyNoInteractions(bookCacheRepository, bookEventRepository);
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(TransactionSynchronization::afterCommit);
     var captor = ArgumentCaptor.forClass(Book.class);
     verify(bookRepository).update(captor.capture());
 
@@ -141,8 +159,23 @@ public class BookServiceTest {
     assertTrue(!updated.getUpdatedAt().isBefore(existingBook.getUpdatedAt()));
     var writes = inOrder(bookRepository, bookCacheRepository, bookEventRepository);
     writes.verify(bookRepository).update(updated);
-    writes.verify(bookCacheRepository).save(updated);
     writes.verify(bookEventRepository).sendBookUpsert(updated);
+    writes.verify(bookCacheRepository).save(updated);
+  }
+
+  @Test
+  void rolledBackPatchDoesNotPublishOrUpdateCache() {
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(), null);
+    when(bookRepository.findByIdForUpdate(book.getId())).thenReturn(Optional.of(book));
+
+    bookService.updateBook(
+        new UpdateBookCommand(book.getId(), null, new Text("Updated"), null, null, null, null));
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(
+            synchronization ->
+                synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+    verifyNoInteractions(bookCacheRepository, bookEventRepository);
   }
 
   @Test
@@ -158,7 +191,7 @@ public class BookServiceTest {
             book.getIssueYear(),
             book.getAuthorIds(),
             book.getCatalogId());
-    when(bookRepository.findById(book.getId())).thenReturn(Optional.empty());
+    when(bookRepository.findByIdForUpdate(book.getId())).thenReturn(Optional.empty());
 
     var exception =
         assertThrows(BookNotFoundException.class, () -> bookService.updateBook(command));
@@ -175,7 +208,7 @@ public class BookServiceTest {
     var command =
         new UpdateBookCommand(
             book.getId(), book.getIsbn(), book.getTitle(), null, null, List.of(), null);
-    when(bookRepository.findById(book.getId())).thenReturn(Optional.of(book));
+    when(bookRepository.findByIdForUpdate(book.getId())).thenReturn(Optional.of(book));
     doThrow(new BookNotFoundException(book.getId())).when(bookRepository).update(any(Book.class));
 
     assertThrows(BookNotFoundException.class, () -> bookService.updateBook(command));
@@ -192,8 +225,8 @@ public class BookServiceTest {
         inOrder(deleteBookContentUseCase, bookRepository, bookCacheRepository, bookEventRepository);
     writes.verify(deleteBookContentUseCase).deleteBookContent(id.value());
     writes.verify(bookRepository).delete(id);
-    writes.verify(bookCacheRepository).delete(id);
     writes.verify(bookEventRepository).sendBookDeleted(id);
+    writes.verify(bookCacheRepository).delete(id);
   }
 
   @Test

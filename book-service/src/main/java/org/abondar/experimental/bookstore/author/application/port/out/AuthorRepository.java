@@ -16,6 +16,9 @@ public interface AuthorRepository {
 
   Optional<Author> findById(Id<Author> id);
 
+  /** Reads and locks the row until the caller's transaction completes. */
+  Optional<Author> findByIdForUpdate(Id<Author> id);
+
   List<Author> findBySortName(String sortName);
 
   void delete(Id<Author> id);

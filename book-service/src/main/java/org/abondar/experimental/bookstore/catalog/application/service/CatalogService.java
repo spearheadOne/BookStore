@@ -48,8 +48,8 @@ public class CatalogService
 
     catalogRepository.save(catalog);
     log.debug("Registered catalog {}", catalog.getId().value());
-    catalogCacheRepository.save(catalog);
     catalogEventRepository.sendCatalogUpserted(catalog);
+    catalogCacheRepository.save(catalog);
   }
 
   @Override
@@ -70,8 +70,8 @@ public class CatalogService
 
     catalogRepository.update(updated);
     log.debug("Renamed catalog {}", catalogId.value());
-    catalogCacheRepository.save(updated);
     catalogEventRepository.sendCatalogUpserted(updated);
+    catalogCacheRepository.save(updated);
 
     return updated;
   }
@@ -99,7 +99,7 @@ public class CatalogService
   public void deleteCatalog(Id<Catalog> catalogId) {
     catalogRepository.delete(catalogId);
     log.debug("Processed deletion of catalog {}", catalogId.value());
-    catalogCacheRepository.delete(catalogId);
     catalogEventRepository.sendCatalogDeleted(catalogId);
+    catalogCacheRepository.delete(catalogId);
   }
 }

@@ -39,6 +39,12 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 120000
+        request.timeout.ms: 30000
+        retry.backoff.ms: 1000
 
 
 management:

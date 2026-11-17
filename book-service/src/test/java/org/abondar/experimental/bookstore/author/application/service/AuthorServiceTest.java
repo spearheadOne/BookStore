@@ -416,9 +416,12 @@ public class AuthorServiceTest {
     var command =
         new UpdateAuthorCommand(
             author.getId(), new Text("Augusta"), null, null, null, null, null, null);
-    when(authorRepository.findById(author.getId())).thenReturn(Optional.of(author));
+    when(authorRepository.findByIdForUpdate(author.getId())).thenReturn(Optional.of(author));
 
     var result = authorService.updateAuthor(command);
+    verifyNoInteractions(authorCacheRepository);
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(TransactionSynchronization::afterCommit);
 
     var captor = ArgumentCaptor.forClass(Author.class);
     verify(authorRepository).update(captor.capture());
@@ -435,10 +438,81 @@ public class AuthorServiceTest {
   }
 
   @Test
+  void rolledBackPatchDoesNotUpdateAuthorCache() {
+    var author = author();
+    when(authorRepository.findByIdForUpdate(author.getId())).thenReturn(Optional.of(author));
+
+    authorService.updateAuthor(
+        new UpdateAuthorCommand(
+            author.getId(), new Text("Updated"), null, null, null, null, null, null));
+    TransactionSynchronizationManager.getSynchronizations()
+        .forEach(
+            synchronization ->
+                synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+    verifyNoInteractions(authorCacheRepository);
+  }
+
+  @Test
+  void updateRejectsAnotherAuthorsIdentity() {
+    var existing = author();
+    var duplicate =
+        Author.create(
+            new Text("Existing"),
+            existing.getLastName(),
+            null,
+            existing.getDateOfBirth(),
+            null,
+            null,
+            null);
+    when(authorRepository.findByIdForUpdate(existing.getId())).thenReturn(Optional.of(existing));
+    when(authorRepository.findByNameAndDob(
+            duplicate.getFirstName(), duplicate.getLastName(), duplicate.getDateOfBirth()))
+        .thenReturn(Optional.of(duplicate));
+
+    assertThrows(
+        AuthorAlreadyExistsException.class,
+        () ->
+            authorService.updateAuthor(
+                new UpdateAuthorCommand(
+                    existing.getId(),
+                    duplicate.getFirstName(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null)));
+
+    verify(authorRepository, never()).update(any(Author.class));
+    verifyNoInteractions(authorCacheRepository);
+  }
+
+  @Test
+  void bookPublicationIsAttemptedBeforeAuthorCacheWrite() {
+    var author = author();
+    var book = Book.create(new Isbn("0306406152"), new Text("Book"), null, null, List.of(), null);
+    var savedBooks = List.of(book.withAuthor(author.getId()));
+    when(bookRepository.findByAuthor(author.getId())).thenReturn(savedBooks);
+    doThrow(new IllegalStateException("Redis unavailable"))
+        .when(authorCacheRepository)
+        .save(author);
+    authorService.saveAuthorWithBooks(author, List.of(book));
+
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            TransactionSynchronizationManager.getSynchronizations()
+                .forEach(TransactionSynchronization::afterCommit));
+
+    verify(bookEventRepository).sendManyUpserts(savedBooks);
+  }
+
+  @Test
   public void updateMissingAuthor() {
     var author = author();
     var command = new UpdateAuthorCommand(author.getId(), null, null, null, null, null, null, null);
-    when(authorRepository.findById(author.getId())).thenReturn(Optional.empty());
+    when(authorRepository.findByIdForUpdate(author.getId())).thenReturn(Optional.empty());
 
     assertThrows(AuthorNotFoundException.class, () -> authorService.updateAuthor(command));
 

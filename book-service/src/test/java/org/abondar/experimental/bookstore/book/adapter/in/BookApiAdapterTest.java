@@ -31,6 +31,7 @@ import org.abondar.experimental.bookstore.book.application.exception.BookAlready
 import org.abondar.experimental.bookstore.book.application.exception.BookContentStorageException;
 import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.exception.InvalidBookReferenceException;
 import org.abondar.experimental.bookstore.book.application.port.in.DeleteBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.DownloadBookUseCase;
 import org.abondar.experimental.bookstore.book.application.port.in.DownloadedBookContent;
@@ -47,6 +48,8 @@ import org.abondar.experimental.bookstore.common.Text;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -283,6 +286,28 @@ class BookApiAdapterTest {
         OffsetDateTime.ofInstant(updated.getCreatedAt(), ZoneOffset.UTC), result.getCreatedAt());
     assertEquals(
         OffsetDateTime.ofInstant(updated.getUpdatedAt(), ZoneOffset.UTC), result.getUpdatedAt());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"authorIds", "catalogId"})
+  void patchRejectsUnknownRelationship(String field) {
+    when(updateBookUseCase.updateBook(any(UpdateBookCommand.class)))
+        .thenThrow(
+            new InvalidBookReferenceException(new IllegalStateException("Foreign key violation")));
+    var id = UUID.randomUUID();
+    var reference = UUID.randomUUID();
+    var value = field.equals("authorIds") ? "[\"" + reference + "\"]" : "\"" + reference + "\"";
+
+    client
+        .patch()
+        .uri("/api/v1/books/{id}", id)
+        .contentType(MediaType.APPLICATION_JSON)
+        .body("{\"" + field + "\":" + value + "}")
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectBody()
+        .isEmpty();
   }
 
   @Test

@@ -23,6 +23,7 @@ import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.adapter.out.BookPersistenceAdapter;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.exception.InvalidBookReferenceException;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.catalog.domain.Catalog;
@@ -30,7 +31,6 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
 
 public class BookPersistencePersistenceAdapterTest extends BasePersistenceAdapterTest {
 
@@ -505,7 +505,7 @@ public class BookPersistencePersistenceAdapterTest extends BasePersistenceAdapte
             null);
 
     assertThrows(
-        DataIntegrityViolationException.class,
+        InvalidBookReferenceException.class,
         () -> adapter.saveMany(List.of(firstBook, secondBook)));
 
     assertAll(
@@ -519,7 +519,7 @@ public class BookPersistencePersistenceAdapterTest extends BasePersistenceAdapte
         .insertInto(AUTHOR)
         .set(AUTHOR.ID, id.value())
         .set(AUTHOR.FIRST_NAME, firstName)
-        .set(AUTHOR.LAST_NAME, "Author")
+        .set(AUTHOR.LAST_NAME, "Author " + id.value())
         .execute();
     return id;
   }

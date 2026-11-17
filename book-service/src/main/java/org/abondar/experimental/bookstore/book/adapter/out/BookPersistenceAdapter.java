@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.book.adapter.out;
 import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.Tables.BOOK;
 import static org.abondar.experimental.bookstore.adapter.out.persistence.generated.tables.BookAuthor.BOOK_AUTHOR;
 
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.Year;
 import java.time.ZoneOffset;
@@ -14,6 +15,7 @@ import org.abondar.experimental.bookstore.adapter.out.persistence.generated.tabl
 import org.abondar.experimental.bookstore.author.domain.Author;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.exception.InvalidBookReferenceException;
 import org.abondar.experimental.bookstore.book.application.port.out.BookRepository;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
@@ -22,6 +24,7 @@ import org.abondar.experimental.bookstore.common.Id;
 import org.abondar.experimental.bookstore.common.Text;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +62,8 @@ public class BookPersistenceAdapter implements BookRepository {
           });
     } catch (DuplicateKeyException exception) {
       throw new BookAlreadyExistsException(book.getIsbn(), exception);
+    } catch (DataIntegrityViolationException exception) {
+      throw translateReferenceViolation(exception);
     }
   }
 
@@ -97,7 +102,17 @@ public class BookPersistenceAdapter implements BookRepository {
       }
     } catch (DuplicateKeyException exception) {
       throw new BookAlreadyExistsException(book.getIsbn(), exception);
+    } catch (DataIntegrityViolationException exception) {
+      throw translateReferenceViolation(exception);
     }
+  }
+
+  private RuntimeException translateReferenceViolation(DataIntegrityViolationException exception) {
+    if (exception.getMostSpecificCause() instanceof SQLException sqlException
+        && "23503".equals(sqlException.getSQLState())) {
+      return new InvalidBookReferenceException(exception);
+    }
+    return exception;
   }
 
   private void replaceAuthorLinks(DSLContext tx, Book book) {
@@ -118,12 +133,16 @@ public class BookPersistenceAdapter implements BookRepository {
       return;
     }
 
-    dslContext.transaction(
-        configuration -> {
-          var tx = DSL.using(configuration);
-          upsertBooks(tx, books);
-          addAuthorLinks(tx, books);
-        });
+    try {
+      dslContext.transaction(
+          configuration -> {
+            var tx = DSL.using(configuration);
+            upsertBooks(tx, books);
+            addAuthorLinks(tx, books);
+          });
+    } catch (DataIntegrityViolationException exception) {
+      throw translateReferenceViolation(exception);
+    }
   }
 
   @Override
@@ -131,7 +150,11 @@ public class BookPersistenceAdapter implements BookRepository {
     if (books.isEmpty()) {
       return;
     }
-    dslContext.transaction(configuration -> addAuthorLinks(DSL.using(configuration), books));
+    try {
+      dslContext.transaction(configuration -> addAuthorLinks(DSL.using(configuration), books));
+    } catch (DataIntegrityViolationException exception) {
+      throw translateReferenceViolation(exception);
+    }
   }
 
   private void upsertBooks(DSLContext tx, List<Book> books) {
@@ -146,7 +169,10 @@ public class BookPersistenceAdapter implements BookRepository {
             BOOK.ISSUE_YEAR,
             BOOK.CREATED_AT,
             BOOK.UPDATED_AT);
-    for (var book : books) {
+    for (var book :
+        books.stream()
+            .sorted(java.util.Comparator.comparing(book -> book.getId().value().toString()))
+            .toList()) {
       insert.values(
           book.getId().value(),
           book.getIsbn().value(),
@@ -172,6 +198,7 @@ public class BookPersistenceAdapter implements BookRepository {
 
   private void addAuthorLinks(DSLContext tx, List<Book> books) {
     var bookIds = books.stream().map(book -> book.getId().value()).toList();
+    tx.select(BOOK.ID).from(BOOK).where(BOOK.ID.in(bookIds)).orderBy(BOOK.ID).forUpdate().fetch();
     var maxOrder = DSL.max(BOOK_AUTHOR.AUTHOR_ORDER).as("max_order");
     var maxOrders =
         tx.select(BOOK_AUTHOR.BOOK_ID, maxOrder)
@@ -204,6 +231,16 @@ public class BookPersistenceAdapter implements BookRepository {
     if (linkCount > 0) {
       insert.onConflict(BOOK_AUTHOR.BOOK_ID, BOOK_AUTHOR.AUTHOR_ID).doNothing().execute();
     }
+  }
+
+  @Override
+  public Optional<Book> findByIdForUpdate(Id<Book> id) {
+    return dslContext
+        .selectFrom(BOOK)
+        .where(BOOK.ID.eq(id.value()))
+        .forUpdate()
+        .fetchOptional()
+        .map(this::toBook);
   }
 
   @Override

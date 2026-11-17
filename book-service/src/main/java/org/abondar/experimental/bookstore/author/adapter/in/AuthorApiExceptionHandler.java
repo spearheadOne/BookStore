@@ -7,6 +7,7 @@ import org.abondar.experimental.bookstore.author.application.exception.AuthorNot
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.exception.InvalidBookReferenceException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -38,7 +39,11 @@ public class AuthorApiExceptionHandler {
     return ResponseEntity.status(503).build();
   }
 
-  @ExceptionHandler({IllegalArgumentException.class, DateTimeException.class})
+  @ExceptionHandler({
+    IllegalArgumentException.class,
+    DateTimeException.class,
+    InvalidBookReferenceException.class
+  })
   public ResponseEntity<Void> invalidAuthor(RuntimeException exception) {
     log.debug("Rejected invalid author request ({})", exception.getClass().getSimpleName());
     return ResponseEntity.badRequest().build();

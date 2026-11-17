@@ -54,8 +54,8 @@ public class CatalogServiceTest {
 
     var writes = inOrder(catalogRepository, catalogCacheRepository, catalogEventRepository);
     writes.verify(catalogRepository).save(catalog);
-    writes.verify(catalogCacheRepository).save(catalog);
     writes.verify(catalogEventRepository).sendCatalogUpserted(catalog);
+    writes.verify(catalogCacheRepository).save(catalog);
   }
 
   @Test
@@ -200,8 +200,8 @@ public class CatalogServiceTest {
 
     var writes = inOrder(catalogRepository, catalogCacheRepository, catalogEventRepository);
     writes.verify(catalogRepository).delete(id);
-    writes.verify(catalogCacheRepository).delete(id);
     writes.verify(catalogEventRepository).sendCatalogDeleted(id);
+    writes.verify(catalogCacheRepository).delete(id);
   }
 
   @Test

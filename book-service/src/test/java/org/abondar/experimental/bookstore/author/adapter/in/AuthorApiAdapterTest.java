@@ -33,6 +33,7 @@ import org.abondar.experimental.bookstore.author.domain.AuthorWithBooks;
 import org.abondar.experimental.bookstore.book.application.exception.BookAlreadyExistsException;
 import org.abondar.experimental.bookstore.book.application.exception.BookEventPublicationException;
 import org.abondar.experimental.bookstore.book.application.exception.BookNotFoundException;
+import org.abondar.experimental.bookstore.book.application.exception.InvalidBookReferenceException;
 import org.abondar.experimental.bookstore.book.domain.Book;
 import org.abondar.experimental.bookstore.book.domain.Isbn;
 import org.abondar.experimental.bookstore.common.Id;
@@ -323,6 +324,22 @@ class AuthorApiAdapterTest {
         .isBadRequest();
 
     verify(addBooksToAuthorUseCase, never()).addBooksToAuthor(any());
+  }
+
+  @Test
+  void addBooksToAuthorRejectsRelationshipDeletedDuringWrite() {
+    when(addBooksToAuthorUseCase.addBooksToAuthor(any(AddBooksToAuthorCommand.class)))
+        .thenThrow(
+            new InvalidBookReferenceException(new IllegalStateException("Foreign key violation")));
+
+    client
+        .post()
+        .uri("/api/v1/authors/{id}/books", UUID.randomUUID())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body("{\"bookIds\":[\"" + UUID.randomUUID() + "\"]}")
+        .exchange()
+        .expectStatus()
+        .isBadRequest();
   }
 
   @Test
