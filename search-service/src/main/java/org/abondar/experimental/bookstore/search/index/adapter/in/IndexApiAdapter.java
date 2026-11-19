@@ -5,10 +5,12 @@ import org.abondar.experimental.bookstore.adapter.in.generated.searchservice.api
 import org.abondar.experimental.bookstore.search.index.application.port.in.CreateIndexUseCase;
 import org.abondar.experimental.bookstore.search.index.application.port.in.DeleteIndexUseCase;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('ROLE_search-admin')")
 public class IndexApiAdapter implements IndexApi {
 
   private final CreateIndexUseCase createIndexUseCase;

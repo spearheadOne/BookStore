@@ -20,6 +20,14 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
       auto-offset-reset: earliest
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/bookstore}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/bookstore}/protocol/openid-connect/certs}
+          audiences:
+            - ${KEYCLOAK_AUDIENCE:book-search}
 
 opensearch:
   url: ${OPENSEARCH_URL:http://localhost:9200}
@@ -48,6 +56,10 @@ s3:
   path-style: ${BOOK_S3_PATH_STYLE:false}
   connect-timeout: ${BOOK_S3_CONNECT_TIMEOUT:1s}
   request-timeout: ${BOOK_S3_REQUEST_TIMEOUT:2m}
+
+springdoc:
+  swagger-ui:
+    url: /openapi.yaml
 
 resilience4j:
   ratelimiter:

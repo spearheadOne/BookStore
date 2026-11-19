@@ -1,7 +1,10 @@
 openapi: 3.0.3
 info:
   title: Bookstore Search API
-  version: 1.3.2
+  version: 1.4.0
+
+security:
+  - bearerAuth: [ ]
 
 tags:
   - name: BookSearch
@@ -60,6 +63,8 @@ paths:
           $ref: '#/components/responses/InvalidSearchRequest'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/SearchUnavailable'
 
@@ -113,6 +118,8 @@ paths:
           $ref: '#/components/responses/InvalidSearchRequest'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/SearchUnavailable'
 
@@ -151,6 +158,8 @@ paths:
           $ref: '#/components/responses/InvalidSearchRequest'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/SearchUnavailable'
 
@@ -164,10 +173,15 @@ paths:
         service-managed indexes using their configured mappings and settings.
         Existing indexes are preserved; this operation does not replace mappings
         or populate documents. Index names are resolved from service configuration.
+        Requires the book-search client role search-admin.
         Internal endpoint; do not expose through public gateway routes.
       responses:
         '201':
           description: All configured indexes created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/IndexOperationUnavailable'
     delete:
@@ -178,14 +192,25 @@ paths:
         Deletes all configured
         service-managed indexes and their indexed documents. Missing indexes are
         treated as already deleted. Stored book metadata and content in Bookstore
-        are unaffected. Internal endpoint; do not expose through public gateway routes.
+        are unaffected. Requires the book-search client role search-admin.
+        Internal endpoint; do not expose through public gateway routes.
       responses:
         '204':
           description: All configured indexes are absent
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/IndexOperationUnavailable'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak access token with the configured issuer and book-search audience.
   parameters:
     ResultLimit:
       name: limit
@@ -233,6 +258,15 @@ components:
         name:
           type: string
   responses:
+    Unauthorized:
+      description: Bearer token is missing, invalid, expired, or has an unexpected issuer or audience.
+      headers:
+        WWW-Authenticate:
+          description: Bearer authentication challenge.
+          schema:
+            type: string
+    Forbidden:
+      description: The token is valid but lacks the book-search client role search-admin required for index administration.
     InvalidSearchRequest:
       description: A UUID is malformed, a supplied search value is blank, the format is unsupported, or the result limit is outside 1 to 100.
     TooManyRequests:

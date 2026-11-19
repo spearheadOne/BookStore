@@ -47,6 +47,74 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "book-search-admin",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "book-search-admin-dev-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "book-search-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "book-search",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "book-search-admin-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "book-search",
+            "claim.name": "resource_access.book-search.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "client": {
+      "book-search": [
+        {
+          "name": "search-admin",
+          "description": "Create and delete the search service managed indexes."
+        }
+      ]
+    }
+  },
+  "clientScopeMappings": {
+    "book-search": [
+      {
+        "client": "book-search-admin",
+        "roles": [
+          "search-admin"
+        ]
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "service-account-book-search-admin",
+      "enabled": true,
+      "serviceAccountClientId": "book-search-admin",
+      "clientRoles": {
+        "book-search": [
+          "search-admin"
+        ]
+      }
     }
   ]
 }

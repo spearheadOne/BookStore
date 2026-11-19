@@ -1,4 +1,4 @@
-package org.abondar.experimental.bookstore.search.adapter.in.api;
+package org.abondar.experimental.bookstore.search.book.adapter.in.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -11,9 +11,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.abondar.experimental.bookstore.adapter.in.generated.searchservice.model.BookSearchResult;
-import org.abondar.experimental.bookstore.search.book.adapter.api.BookContentFormatConverter;
-import org.abondar.experimental.bookstore.search.book.adapter.in.api.BookSearchApiAdapter;
-import org.abondar.experimental.bookstore.search.book.adapter.in.api.BookSearchApiExceptionHandler;
 import org.abondar.experimental.bookstore.search.book.application.exception.BookSearchException;
 import org.abondar.experimental.bookstore.search.book.application.port.in.BookSearchContentQuery;
 import org.abondar.experimental.bookstore.search.book.application.port.in.BookSearchMetadataQuery;
