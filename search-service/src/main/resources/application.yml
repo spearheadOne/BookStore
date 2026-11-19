@@ -48,3 +48,15 @@ s3:
   path-style: ${BOOK_S3_PATH_STYLE:false}
   connect-timeout: ${BOOK_S3_CONNECT_TIMEOUT:1s}
   request-timeout: ${BOOK_S3_REQUEST_TIMEOUT:2m}
+
+resilience4j:
+  ratelimiter:
+    instances:
+      reads:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 0s
+      writes:
+        limit-for-period: 20
+        limit-refresh-period: 1s
+        timeout-duration: 0s
