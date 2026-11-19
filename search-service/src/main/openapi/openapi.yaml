@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Bookstore Search API
-  version: 1.3.1
+  version: 1.3.2
 
 tags:
   - name: BookSearch
@@ -58,6 +58,8 @@ paths:
                   $ref: '#/components/schemas/BookSearchResult'
         '400':
           $ref: '#/components/responses/InvalidSearchRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/SearchUnavailable'
 
@@ -109,6 +111,8 @@ paths:
                   $ref: '#/components/schemas/BookSearchResult'
         '400':
           $ref: '#/components/responses/InvalidSearchRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/SearchUnavailable'
 
@@ -145,6 +149,8 @@ paths:
                   $ref: '#/components/schemas/CatalogSearchResult'
         '400':
           $ref: '#/components/responses/InvalidSearchRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/SearchUnavailable'
 
@@ -229,6 +235,10 @@ components:
   responses:
     InvalidSearchRequest:
       description: A UUID is malformed, a supplied search value is blank, the format is unsupported, or the result limit is outside 1 to 100.
+    TooManyRequests:
+      description: >-
+        Request rate exceeded the shared read limit for this service instance.
+        Retry after the limit refreshes. The response body is empty.
     SearchUnavailable:
       description: The required search indexes are unavailable or the search operation could not be completed.
     IndexOperationUnavailable:
