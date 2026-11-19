@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.search.catalog.adapter.in.event;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.search.adapter.in.event.BaseEventAdapter;
+import org.abondar.experimental.bookstore.search.catalog.application.domain.CatalogDocument;
 import org.abondar.experimental.bookstore.search.catalog.application.port.in.DeleteCatalogUseCase;
 import org.abondar.experimental.bookstore.search.catalog.application.port.in.UpsertCatalogUseCase;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -25,8 +26,11 @@ public class CatalogEventAdapter extends BaseEventAdapter {
     var catalogId = genericRecord.get("catalogId").toString();
 
     switch (genericRecord.getSchema().getName()) {
-      case "CatalogUpserted" ->
-          upsertCatalogUseCase.upsertCatalog(catalogId, genericRecord.get("name").toString());
+      case "CatalogUpserted" -> {
+        var document = new CatalogDocument(catalogId, genericRecord.get("name").toString());
+        upsertCatalogUseCase.upsertCatalog(document);
+      }
+
       case "CatalogDeleted" -> deleteCatalogUseCase.deleteCatalog(catalogId);
       default -> throw new IllegalArgumentException("Unsupported catalog event");
     }

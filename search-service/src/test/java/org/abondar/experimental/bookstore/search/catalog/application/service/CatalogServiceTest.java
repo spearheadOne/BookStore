@@ -8,10 +8,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.List;
 import org.abondar.experimental.bookstore.search.book.application.port.out.BookMetadataRepository;
+import org.abondar.experimental.bookstore.search.catalog.application.domain.CatalogDocument;
+import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogSearchException;
+import org.abondar.experimental.bookstore.search.catalog.application.port.in.CatalogSearchQuery;
 import org.abondar.experimental.bookstore.search.catalog.application.port.out.CatalogRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +33,7 @@ class CatalogServiceTest {
 
   @Test
   void upsertsCatalog() {
-    service.upsertCatalog("catalog-id", "Catalog");
+    service.upsertCatalog(new CatalogDocument("catalog-id", "Catalog"));
     verify(repository).upsertCatalog("catalog-id", "Catalog");
     verifyNoMoreInteractions(repository);
     verifyNoInteractions(bookMetadataRepository);
@@ -50,7 +55,8 @@ class CatalogServiceTest {
     assertSame(
         failure,
         assertThrows(
-            UncheckedIOException.class, () -> service.upsertCatalog("catalog-id", "Catalog")));
+            UncheckedIOException.class,
+            () -> service.upsertCatalog(new CatalogDocument("catalog-id", "Catalog"))));
   }
 
   @Test
@@ -89,5 +95,37 @@ class CatalogServiceTest {
 
     verify(repository, times(2)).deleteCatalog("catalog-id");
     verify(bookMetadataRepository, times(2)).unlinkCatalogId("catalog-id");
+  }
+
+  @Test
+  void searchDelegatesToCatalogRepository() {
+    var query = new CatalogSearchQuery("catalog-id", "Science", 5);
+    var catalogs = List.of(new CatalogDocument("catalog-id", "Science Fiction"));
+    when(repository.searchCatalogs(query)).thenReturn(catalogs);
+
+    assertSame(catalogs, service.searchCatalogs(query));
+    verify(repository).searchCatalogs(query);
+    verifyNoInteractions(bookMetadataRepository);
+  }
+
+  @Test
+  void searchPreservesEmptyResults() {
+    var query = new CatalogSearchQuery(null, "missing", 20);
+    var catalogs = List.<CatalogDocument>of();
+    when(repository.searchCatalogs(query)).thenReturn(catalogs);
+
+    assertSame(catalogs, service.searchCatalogs(query));
+    verifyNoInteractions(bookMetadataRepository);
+  }
+
+  @Test
+  void searchFailurePropagatesToApi() {
+    var query = new CatalogSearchQuery(null, "Science", 20);
+    var failure = new CatalogSearchException("Unavailable", new IOException("Disconnected"));
+    when(repository.searchCatalogs(query)).thenThrow(failure);
+
+    assertSame(
+        failure, assertThrows(CatalogSearchException.class, () -> service.searchCatalogs(query)));
+    verifyNoInteractions(bookMetadataRepository);
   }
 }

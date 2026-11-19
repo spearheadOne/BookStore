@@ -8,16 +8,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.abondar.experimental.bookstore.search.adapter.out.BaseOpenSearchAdapterTest;
 import org.abondar.experimental.bookstore.search.book.adapter.out.BookOpenSearchAdapter;
 import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
+import org.abondar.experimental.bookstore.search.catalog.application.domain.CatalogDocument;
 import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogEventException;
+import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogSearchException;
+import org.abondar.experimental.bookstore.search.catalog.application.port.in.CatalogSearchQuery;
 import org.abondar.experimental.bookstore.search.config.OpenSearchConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.OpenSearchException;
 
 class CatalogOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
 
@@ -102,7 +108,89 @@ class CatalogOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
 
       assertNotNull(upsert.getCause());
       assertNotNull(deletion.getCause());
+      var search =
+          assertThrows(
+              CatalogSearchException.class,
+              () -> unavailable.searchCatalogs(new CatalogSearchQuery(null, "Science", 20)));
+      assertNotNull(search.getCause());
     }
+  }
+
+  @Test
+  void searchesAnalyzedNameWithoutAnId() throws IOException {
+    var science = saveCatalog("Science Fiction");
+    var historical = saveCatalog("Historical Fiction");
+    saveCatalog("Cooking");
+    refreshCatalogs();
+
+    var results = adapter.searchCatalogs(new CatalogSearchQuery(null, "FICTION", 20));
+
+    assertEquals(Set.of(science, historical), Set.copyOf(results));
+    assertEquals(2, results.size());
+    assertTrue(adapter.searchCatalogs(new CatalogSearchQuery(null, "Fict", 20)).isEmpty());
+  }
+
+  @Test
+  void searchesByIdAloneAndCombinesIdAndNameWithAnd() throws IOException {
+    var science = saveCatalog("Science Fiction");
+    saveCatalog("Cooking");
+    refreshCatalogs();
+
+    assertEquals(
+        List.of(science),
+        adapter.searchCatalogs(new CatalogSearchQuery(science.catalogId(), null, 20)));
+    assertEquals(
+        List.of(science),
+        adapter.searchCatalogs(new CatalogSearchQuery(science.catalogId(), "fiction", 20)));
+    assertTrue(
+        adapter
+            .searchCatalogs(new CatalogSearchQuery(science.catalogId(), "Cooking", 20))
+            .isEmpty());
+  }
+
+  @Test
+  void unknownIdAndNameReturnEmptyResults() throws IOException {
+    saveCatalog("Science Fiction");
+    refreshCatalogs();
+
+    assertTrue(
+        adapter
+            .searchCatalogs(new CatalogSearchQuery(UUID.randomUUID().toString(), null, 20))
+            .isEmpty());
+    assertTrue(adapter.searchCatalogs(new CatalogSearchQuery(null, "missingword", 20)).isEmpty());
+  }
+
+  @Test
+  void appliesLimitsAboveAndBelowTheOpenSearchDefault() throws IOException {
+    for (int i = 0; i < 18; i++) {
+      saveCatalog("Science " + i);
+    }
+    refreshCatalogs();
+
+    assertEquals(15, adapter.searchCatalogs(new CatalogSearchQuery(null, null, 15)).size());
+    assertEquals(1, adapter.searchCatalogs(new CatalogSearchQuery(null, "Science", 1)).size());
+  }
+
+  @Test
+  void missingIndexSearchRetainsTheOpenSearchCause() throws IOException {
+    client.indices().delete(request -> request.index(properties.catalogIndex()));
+
+    var failure =
+        assertThrows(
+            CatalogSearchException.class,
+            () -> adapter.searchCatalogs(new CatalogSearchQuery(null, null, 20)));
+
+    assertEquals(404, ((OpenSearchException) failure.getCause()).status());
+  }
+
+  private CatalogDocument saveCatalog(String name) {
+    var document = new CatalogDocument(UUID.randomUUID().toString(), name);
+    adapter.upsertCatalog(document.catalogId(), document.name());
+    return document;
+  }
+
+  private void refreshCatalogs() throws IOException {
+    client.indices().refresh(request -> request.index(properties.catalogIndex()));
   }
 
   private Map<?, ?> findCatalog(String id) throws IOException {

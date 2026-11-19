@@ -3,7 +3,6 @@ package org.abondar.experimental.bookstore.search.adapter.in.api;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.adapter.in.generated.searchservice.api.BookSearchApi;
 import org.abondar.experimental.bookstore.adapter.in.generated.searchservice.model.BookContentFormat;
 import org.abondar.experimental.bookstore.adapter.in.generated.searchservice.model.BookSearchResult;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@Slf4j
 public class BookSearchApiAdapter implements BookSearchApi {
 
   private final SearchBookMetadataUseCase searchBookMetadataUseCase;
