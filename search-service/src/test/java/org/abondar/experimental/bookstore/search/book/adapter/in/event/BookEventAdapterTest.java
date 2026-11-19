@@ -11,7 +11,8 @@ import org.abondar.experimental.bookstore.events.avro.BookContentFormat;
 import org.abondar.experimental.bookstore.events.avro.BookDeleted;
 import org.abondar.experimental.bookstore.events.avro.BookMetadataUpserted;
 import org.abondar.experimental.bookstore.search.adapter.in.event.BaseEventAdapterTest;
-import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
+import org.abondar.experimental.bookstore.search.book.domain.BookContentDocument;
+import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.opensearch._types.FieldValue;
 
@@ -25,7 +26,8 @@ class BookEventAdapterTest extends BaseEventAdapterTest {
     publishAndAwait(metadata(id, "Book", "Description", catalog));
 
     assertEquals(
-        new BookMetadata(id.toString(), "0306406152", "Book", "Description", catalog.toString()),
+        new BookMetadataDocument(
+            id.toString(), "0306406152", "Book", "Description", catalog.toString()),
         find(id));
   }
 
@@ -35,7 +37,8 @@ class BookEventAdapterTest extends BaseEventAdapterTest {
 
     publishAndAwait(metadata(id, "Book", null, null));
 
-    assertEquals(new BookMetadata(id.toString(), "0306406152", "Book", null, null), find(id));
+    assertEquals(
+        new BookMetadataDocument(id.toString(), "0306406152", "Book", null, null), find(id));
   }
 
   @Test
@@ -46,7 +49,8 @@ class BookEventAdapterTest extends BaseEventAdapterTest {
     publishAndAwait(metadata(id, "Updated title", null, null));
 
     assertEquals(
-        new BookMetadata(id.toString(), "0306406152", "Updated title", null, null), find(id));
+        new BookMetadataDocument(id.toString(), "0306406152", "Updated title", null, null),
+        find(id));
   }
 
   @Test
@@ -68,7 +72,8 @@ class BookEventAdapterTest extends BaseEventAdapterTest {
                             query.term(
                                 term -> term.field("bookId").value(FieldValue.of(id.toString())))));
     assertEquals(1L, count.count());
-    assertEquals(new BookMetadata(id.toString(), "0306406152", "Book", null, null), find(id));
+    assertEquals(
+        new BookMetadataDocument(id.toString(), "0306406152", "Book", null, null), find(id));
   }
 
   @Test
@@ -84,10 +89,13 @@ class BookEventAdapterTest extends BaseEventAdapterTest {
 
     assertFalse(
         client
-            .get(request -> request.index(METADATA_INDEX).id(id.toString()), BookMetadata.class)
+            .get(
+                request -> request.index(METADATA_INDEX).id(id.toString()),
+                BookMetadataDocument.class)
             .found());
     assertEquals(
-        new BookMetadata(otherId.toString(), "0306406152", "Keep this", null, null), find(otherId));
+        new BookMetadataDocument(otherId.toString(), "0306406152", "Keep this", null, null),
+        find(otherId));
   }
 
   @Test
@@ -98,23 +106,33 @@ class BookEventAdapterTest extends BaseEventAdapterTest {
             UUID.randomUUID(),
             Instant.now(),
             id,
-            BookContentFormat.pdf,
-            id + "/pdf/file.pdf",
-            "application/pdf",
-            "book.pdf",
+            BookContentFormat.rtf,
+            id + "/rtf/file.rtf",
+            "application/rtf",
+            "book.rtf",
             100L);
 
     publishAndAwait(event);
 
+    var indexed =
+        client.get(
+            request -> request.index("test-book-content").id(id + ":rtf"),
+            BookContentDocument.class);
+    assertTrue(indexed.found());
+    assertTrue(indexed.source().content().contains("Book text"));
+
     assertFalse(
         client
-            .get(request -> request.index(METADATA_INDEX).id(id.toString()), BookMetadata.class)
+            .get(
+                request -> request.index(METADATA_INDEX).id(id.toString()),
+                BookMetadataDocument.class)
             .found());
   }
 
-  private BookMetadata find(UUID id) throws Exception {
+  private BookMetadataDocument find(UUID id) throws Exception {
     var result =
-        client.get(request -> request.index(METADATA_INDEX).id(id.toString()), BookMetadata.class);
+        client.get(
+            request -> request.index(METADATA_INDEX).id(id.toString()), BookMetadataDocument.class);
     assertTrue(result.found());
     return result.source();
   }

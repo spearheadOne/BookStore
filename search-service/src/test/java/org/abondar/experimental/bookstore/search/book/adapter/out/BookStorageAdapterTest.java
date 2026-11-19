@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.function.Consumer;
-import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.book.domain.BookContent;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -104,7 +104,7 @@ class BookStorageAdapterTest {
         new BookContent(
             "missing", "pdf", UUID.randomUUID() + "/pdf/file.pdf", "application/pdf", null, 1L);
     var failure =
-        assertThrows(BookEventException.class, () -> adapter.downloadBookContent(content));
+        assertThrows(BookMetadataEventException.class, () -> adapter.downloadBookContent(content));
     org.junit.jupiter.api.Assertions.assertInstanceOf(NoSuchKeyException.class, failure.getCause());
   }
 
@@ -119,7 +119,7 @@ class BookStorageAdapterTest {
 
     var failure =
         assertThrows(
-            BookEventException.class,
+            BookMetadataEventException.class,
             () -> new BookStorageAdapter(unavailable, BUCKET).downloadBookContent(content));
 
     assertSame(cause, failure.getCause());

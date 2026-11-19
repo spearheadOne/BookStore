@@ -7,7 +7,7 @@ import org.abondar.experimental.bookstore.search.book.application.port.in.Delete
 import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookContentUseCase;
 import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookMetadataUseCase;
 import org.abondar.experimental.bookstore.search.book.domain.BookContent;
-import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
+import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -42,7 +42,7 @@ public class BookEventAdapter extends BaseEventAdapter {
                 ? null
                 : genericRecord.get("catalogId").toString();
 
-        var book = new BookMetadata(bookId, isbn, title, description, catalogId);
+        var book = new BookMetadataDocument(bookId, isbn, title, description, catalogId);
 
         upsertBookMetadataUseCase.upsertBookMetadata(book);
       }

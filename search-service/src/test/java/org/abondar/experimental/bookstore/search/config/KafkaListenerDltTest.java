@@ -29,8 +29,8 @@ import org.abondar.experimental.bookstore.events.avro.BookContentFormat;
 import org.abondar.experimental.bookstore.events.avro.BookMetadataUpserted;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookDecoder;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookEventAdapter;
-import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
-import org.abondar.experimental.bookstore.search.book.application.exception.ContentEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookContentEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.book.application.port.in.DeleteBookUseCase;
 import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookContentUseCase;
 import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookMetadataUseCase;
@@ -221,7 +221,7 @@ class KafkaListenerDltTest {
     createTopic(dlt);
     RuntimeException failure =
         kind.equals("book")
-            ? new BookEventException("Temporary failure", new IOException("Disconnected"))
+            ? new BookMetadataEventException("Temporary failure", new IOException("Disconnected"))
             : new CatalogEventException("Temporary failure", new IOException("Disconnected"));
     doThrow(failure).doNothing().when(upsert).upsertBookMetadata(any());
     var offset = send(metadata());
@@ -239,7 +239,7 @@ class KafkaListenerDltTest {
     createTopic(dlt);
     RuntimeException failure =
         kind.equals("book")
-            ? new BookEventException("Indexing failed", openSearchFailure(status))
+            ? new BookMetadataEventException("Indexing failed", openSearchFailure(status))
             : new CatalogEventException("Indexing failed", openSearchFailure(status));
     doThrow(failure).when(upsert).upsertBookMetadata(any());
     var payload = metadata();
@@ -254,7 +254,7 @@ class KafkaListenerDltTest {
   @Test
   void invalidContentGoesDirectlyToDlt() throws Exception {
     createTopic(dlt);
-    doThrow(new ContentEventException("Invalid document", new TikaException("Corrupt PDF")))
+    doThrow(new BookContentEventException("Invalid document", new TikaException("Corrupt PDF")))
         .when(contentUpsert)
         .upsertBookContent(any());
     var payload = content();
@@ -268,7 +268,7 @@ class KafkaListenerDltTest {
   @Test
   void transientContentFailureRetriesThenPublishesDlt() throws Exception {
     createTopic(dlt);
-    doThrow(new BookEventException("S3 unavailable", new IOException("Disconnected")))
+    doThrow(new BookMetadataEventException("S3 unavailable", new IOException("Disconnected")))
         .when(contentUpsert)
         .upsertBookContent(any());
     var payload = content();

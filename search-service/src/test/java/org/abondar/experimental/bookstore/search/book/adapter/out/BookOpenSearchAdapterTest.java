@@ -10,9 +10,9 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.UUID;
 import org.abondar.experimental.bookstore.search.adapter.out.BaseOpenSearchAdapterTest;
-import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.book.domain.BookContentDocument;
-import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
+import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
 import org.abondar.experimental.bookstore.search.config.OpenSearchConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,8 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
   void missingIndexIsRejectedWithoutCreatingDynamicMappings() throws IOException {
     var book = metadata("Description", null);
 
-    var failure = assertThrows(BookEventException.class, () -> adapter.upsertBookMetadata(book));
+    var failure =
+        assertThrows(BookMetadataEventException.class, () -> adapter.upsertBookMetadata(book));
 
     assertEquals(404, ((OpenSearchException) failure.getCause()).status());
     assertFalse(
@@ -54,7 +55,8 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
     indexAdapter.createIndexes();
     var original = metadata("Original description", UUID.randomUUID().toString());
     adapter.upsertBookMetadata(original);
-    var updated = new BookMetadata(original.bookId(), "9780134685991", "Updated title", null, null);
+    var updated =
+        new BookMetadataDocument(original.bookId(), "9780134685991", "Updated title", null, null);
 
     adapter.upsertBookMetadata(updated);
 
@@ -90,14 +92,15 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
         client
             .get(
                 request -> request.index(properties.bookMetadataIndex()).id(book.bookId()),
-                BookMetadata.class)
+                BookMetadataDocument.class)
             .found());
     assertEquals(other, findMetadata(other.bookId()));
   }
 
   @Test
   void missingIndexDeletionRemainsAnError() {
-    assertThrows(BookEventException.class, () -> adapter.deleteBook(UUID.randomUUID().toString()));
+    assertThrows(
+        BookMetadataEventException.class, () -> adapter.deleteBook(UUID.randomUUID().toString()));
   }
 
   @Test
@@ -127,7 +130,8 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
 
     for (var book : java.util.List.of(first, second)) {
       assertEquals(
-          new BookMetadata(book.bookId(), book.isbn(), book.title(), book.description(), null),
+          new BookMetadataDocument(
+              book.bookId(), book.isbn(), book.title(), book.description(), null),
           findMetadata(book.bookId()));
     }
     assertEquals(other, findMetadata(other.bookId()));
@@ -162,7 +166,8 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
     adapter.unlinkCatalogId(catalogId);
 
     assertEquals(
-        new BookMetadata(book.bookId(), book.isbn(), book.title(), book.description(), null),
+        new BookMetadataDocument(
+            book.bookId(), book.isbn(), book.title(), book.description(), null),
         findMetadata(book.bookId()));
   }
 
@@ -237,7 +242,7 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
         client
             .get(
                 request -> request.index(properties.bookMetadataIndex()).id(book.bookId()),
-                BookMetadata.class)
+                BookMetadataDocument.class)
             .found());
     assertEquals(other, findMetadata(other.bookId()));
   }
@@ -263,17 +268,20 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
       var book = metadata(null, null);
 
       var upsert =
-          assertThrows(BookEventException.class, () -> unavailable.upsertBookMetadata(book));
+          assertThrows(
+              BookMetadataEventException.class, () -> unavailable.upsertBookMetadata(book));
       var deletion =
-          assertThrows(BookEventException.class, () -> unavailable.deleteBook(book.bookId()));
+          assertThrows(
+              BookMetadataEventException.class, () -> unavailable.deleteBook(book.bookId()));
 
       var unlink =
-          assertThrows(BookEventException.class, () -> unavailable.unlinkCatalogId("catalog-id"));
+          assertThrows(
+              BookMetadataEventException.class, () -> unavailable.unlinkCatalogId("catalog-id"));
       assertNotNull(unlink.getCause());
       assertTrue(unlink.getMessage().contains("update documents"));
       var content =
           assertThrows(
-              BookEventException.class,
+              BookMetadataEventException.class,
               () ->
                   unavailable.upsertBookContent(
                       new BookContentDocument(book.bookId(), "pdf", "book.pdf", "Text")));
@@ -285,17 +293,17 @@ class BookOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
     }
   }
 
-  private BookMetadata findMetadata(String bookId) throws IOException {
+  private BookMetadataDocument findMetadata(String bookId) throws IOException {
     var result =
         client.get(
             request -> request.index(properties.bookMetadataIndex()).id(bookId),
-            BookMetadata.class);
+            BookMetadataDocument.class);
     assertTrue(result.found());
     return result.source();
   }
 
-  private BookMetadata metadata(String description, String catalogId) {
-    return new BookMetadata(
+  private BookMetadataDocument metadata(String description, String catalogId) {
+    return new BookMetadataDocument(
         UUID.randomUUID().toString(), "0306406152", "Book", description, catalogId);
   }
 }

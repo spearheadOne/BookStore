@@ -3,7 +3,7 @@ package org.abondar.experimental.bookstore.search.book.adapter.out;
 import java.io.InputStream;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
-import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.book.application.port.out.BookStorageRepository;
 import org.abondar.experimental.bookstore.search.book.domain.BookContent;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,7 +55,7 @@ public class BookStorageAdapter implements BookStorageRepository {
           bucketName,
           bookContent.storageKey(),
           exception.getClass().getSimpleName());
-      throw new BookEventException(
+      throw new BookMetadataEventException(
           "Book content download failed for " + bookContent.bookId(), exception);
     }
   }

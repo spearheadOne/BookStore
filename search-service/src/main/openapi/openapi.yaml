@@ -1,13 +1,153 @@
 openapi: 3.0.3
 info:
   title: Bookstore Search API
-  version: 1.1.1
+  version: 1.3.1
 
 tags:
+  - name: BookSearch
+    description: Search book metadata and extracted book text
+  - name: CatalogSearch
+    description: Search catalogs
   - name: Index
     description: Internal administration of the configured search indexes
 
 paths:
+  /api/v1/search/books:
+    get:
+      tags: [ BookSearch ]
+      operationId: searchBookMetadata
+      summary: Search book metadata
+      description: >-
+        Searches the book metadata index only. The q parameter matches title or
+        description; bookId, isbn and catalogId are exact filters. All supplied
+        criteria must match. Does not search extracted book text. With no criteria,
+        returns a bounded list of indexed books. Results are eventually consistent
+        with Bookstore writes. An empty result is 200 with [].
+      parameters:
+        - name: bookId
+          in: query
+          description: Exact book ID filter.
+          schema:
+            type: string
+            format: uuid
+        - name: isbn
+          in: query
+          description: Exact canonical ISBN filter, without spaces or hyphens.
+          schema:
+            $ref: '#/components/schemas/SearchText'
+        - name: catalogId
+          in: query
+          description: Exact catalog ID filter on book metadata.
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          description: Analyzed full-text search across title and description only.
+          schema:
+            $ref: '#/components/schemas/SearchText'
+        - $ref: '#/components/parameters/ResultLimit'
+      responses:
+        '200':
+          description: Matching books, deduplicated by bookId, up to the requested limit.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookSearchResult'
+        '400':
+          $ref: '#/components/responses/InvalidSearchRequest'
+        '503':
+          $ref: '#/components/responses/SearchUnavailable'
+
+  /api/v1/search/books/content:
+    get:
+      tags: [ BookSearch ]
+      operationId: searchBookContent
+      summary: Find books by their uploaded content
+      description: >-
+        Searches extracted PDF, EPUB and RTF content only. The q parameter matches
+        content, while bookId, format and originalFilename restrict the matching
+        content documents. All supplied criteria must match the same content
+        document. Retrieves full book metadata for the matching book IDs and
+        returns each book once. Does not independently search title or description.
+        ISBN and catalog filters belong to the metadata search endpoint. Books
+        without indexed metadata are omitted. Results are eventually consistent
+        with Bookstore writes. An empty result is 200 with [].
+      parameters:
+        - name: bookId
+          in: query
+          description: Exact book ID filter.
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          description: Exact filter requiring a matching uploaded content format.
+          schema:
+            $ref: '#/components/schemas/BookContentFormat'
+        - name: originalFilename
+          in: query
+          description: Exact, case-sensitive filename filter using the originalFilename.keyword subfield.
+          schema:
+            $ref: '#/components/schemas/SearchText'
+        - name: q
+          in: query
+          description: Analyzed full-text search in extracted book content only.
+          schema:
+            $ref: '#/components/schemas/SearchText'
+        - $ref: '#/components/parameters/ResultLimit'
+      responses:
+        '200':
+          description: Matching books, deduplicated by bookId, up to the requested limit.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookSearchResult'
+        '400':
+          $ref: '#/components/responses/InvalidSearchRequest'
+        '503':
+          $ref: '#/components/responses/SearchUnavailable'
+
+  /api/v1/search/catalogs:
+    get:
+      tags: [ CatalogSearch ]
+      operationId: searchCatalogs
+      summary: Search catalogs by ID and name
+      description: >-
+        Supplied ID and name criteria are combined with AND. With no search
+        criteria, returns a bounded list of indexed catalogs. Search results are
+        eventually consistent with Bookstore writes. An empty result is 200 with [].
+      parameters:
+        - name: id
+          in: query
+          description: Exact catalog ID filter.
+          schema:
+            type: string
+            format: uuid
+        - name: name
+          in: query
+          description: Analyzed full-text match against the catalog name, not an exact or substring filter.
+          schema:
+            $ref: '#/components/schemas/SearchText'
+        - $ref: '#/components/parameters/ResultLimit'
+      responses:
+        '200':
+          description: Matching catalogs, up to the requested limit.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogSearchResult'
+        '400':
+          $ref: '#/components/responses/InvalidSearchRequest'
+        '503':
+          $ref: '#/components/responses/SearchUnavailable'
+
   /internal/api/v1/indexes:
     post:
       tags: [ Index ]
@@ -40,7 +180,57 @@ paths:
           $ref: '#/components/responses/IndexOperationUnavailable'
 
 components:
+  parameters:
+    ResultLimit:
+      name: limit
+      in: query
+      description: Maximum number of results; applied after book results are deduplicated when searching books.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+  schemas:
+    SearchText:
+      type: string
+      minLength: 1
+      description: A nonblank search value.
+    BookContentFormat:
+      type: string
+      enum: [ epub, rtf, pdf ]
+    BookSearchResult:
+      type: object
+      required: [ bookId, isbn, title ]
+      properties:
+        bookId:
+          type: string
+          format: uuid
+        isbn:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        catalogId:
+          type: string
+          format: uuid
+          nullable: true
+    CatalogSearchResult:
+      type: object
+      required: [ catalogId, name ]
+      properties:
+        catalogId:
+          type: string
+          format: uuid
+        name:
+          type: string
   responses:
+    InvalidSearchRequest:
+      description: A UUID is malformed, a supplied search value is blank, the format is unsupported, or the result limit is outside 1 to 100.
+    SearchUnavailable:
+      description: The required search indexes are unavailable or the search operation could not be completed.
     IndexOperationUnavailable:
       description: >-
         OpenSearch could not complete the operation. Changes to multiple indexes

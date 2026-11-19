@@ -13,8 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
-import org.abondar.experimental.bookstore.search.book.application.exception.ContentEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookContentEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.book.domain.BookContent;
 import org.abondar.experimental.bookstore.search.config.BookContentProperties;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -74,7 +74,8 @@ class BookContentParserTest {
     var stream = new TrackingStream("%PDF-1.7\nbroken".getBytes(StandardCharsets.US_ASCII));
     var content = new BookContent("book-id", "pdf", "key", "application/pdf", "book.pdf", 15L);
 
-    var failure = assertThrows(ContentEventException.class, () -> parser.parse(content, stream));
+    var failure =
+        assertThrows(BookContentEventException.class, () -> parser.parse(content, stream));
 
     assertNotNull(failure.getCause());
     assertTrue(stream.closed);
@@ -103,7 +104,7 @@ class BookContentParserTest {
 
     var failure =
         assertThrows(
-            ContentEventException.class,
+            BookContentEventException.class,
             () -> limitedParser.parse(content, new ByteArrayInputStream(bytes)));
 
     assertNotNull(failure.getCause());
@@ -126,7 +127,8 @@ class BookContentParserTest {
           }
         };
 
-    var failure = assertThrows(BookEventException.class, () -> parser.parse(content, stream));
+    var failure =
+        assertThrows(BookMetadataEventException.class, () -> parser.parse(content, stream));
 
     assertNotNull(failure.getCause());
   }

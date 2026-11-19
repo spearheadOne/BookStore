@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
-import org.abondar.experimental.bookstore.search.book.application.exception.ContentEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookContentEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.book.domain.BookContent;
 import org.abondar.experimental.bookstore.search.book.domain.BookContentDocument;
 import org.abondar.experimental.bookstore.search.config.BookContentProperties;
@@ -45,12 +45,12 @@ public class BookContentParser {
       return new BookContentDocument(
           content.bookId(), content.format(), content.originalFileName(), handler.toString());
     } catch (IOException exception) {
-      throw new BookEventException(
+      throw new BookMetadataEventException(
           "Could not read content for book " + content.bookId(), exception);
     } catch (SAXException | TikaException exception) {
       log.warn(
           "Could not parse {} content for book {}", content.format(), content.bookId(), exception);
-      throw new ContentEventException(
+      throw new BookContentEventException(
           "Could not parse content for book " + content.bookId(), exception);
     }
   }

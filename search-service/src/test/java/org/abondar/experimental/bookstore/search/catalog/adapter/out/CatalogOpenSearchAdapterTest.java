@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.abondar.experimental.bookstore.search.adapter.out.BaseOpenSearchAdapterTest;
 import org.abondar.experimental.bookstore.search.book.adapter.out.BookOpenSearchAdapter;
-import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
+import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
 import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogEventException;
 import org.abondar.experimental.bookstore.search.config.OpenSearchConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +66,8 @@ class CatalogOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
     var other = UUID.randomUUID().toString();
     adapter.upsertCatalog(id, "Delete this");
     adapter.upsertCatalog(other, "Keep this");
-    var book = new BookMetadata(UUID.randomUUID().toString(), "0306406152", "Book", null, id);
+    var book =
+        new BookMetadataDocument(UUID.randomUUID().toString(), "0306406152", "Book", null, id);
     new BookOpenSearchAdapter(properties, client).upsertBookMetadata(book);
 
     adapter.deleteCatalog(id);
@@ -79,7 +80,7 @@ class CatalogOpenSearchAdapterTest extends BaseOpenSearchAdapterTest {
         client
             .get(
                 request -> request.index(properties.bookMetadataIndex()).id(book.bookId()),
-                BookMetadata.class)
+                BookMetadataDocument.class)
             .found());
   }
 

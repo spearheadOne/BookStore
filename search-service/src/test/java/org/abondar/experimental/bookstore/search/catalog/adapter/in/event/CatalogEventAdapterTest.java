@@ -11,7 +11,7 @@ import org.abondar.experimental.bookstore.events.avro.BookMetadataUpserted;
 import org.abondar.experimental.bookstore.events.avro.CatalogDeleted;
 import org.abondar.experimental.bookstore.events.avro.CatalogUpserted;
 import org.abondar.experimental.bookstore.search.adapter.in.event.BaseEventAdapterTest;
-import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
+import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.opensearch._types.FieldValue;
 
@@ -85,10 +85,12 @@ class CatalogEventAdapterTest extends BaseEventAdapterTest {
             .found());
     var book =
         client.get(
-            request -> request.index(METADATA_INDEX).id(bookId.toString()), BookMetadata.class);
+            request -> request.index(METADATA_INDEX).id(bookId.toString()),
+            BookMetadataDocument.class);
     assertTrue(book.found());
     assertEquals(
-        new BookMetadata(bookId.toString(), "0306406152", "Book", null, null), book.source());
+        new BookMetadataDocument(bookId.toString(), "0306406152", "Book", null, null),
+        book.source());
     assertTrue(
         client.get(request -> request.index("test-book-content").id(contentId), Map.class).found());
   }

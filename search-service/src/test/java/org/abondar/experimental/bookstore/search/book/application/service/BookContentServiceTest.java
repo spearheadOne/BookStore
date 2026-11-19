@@ -9,12 +9,15 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.io.InputStream;
-import org.abondar.experimental.bookstore.search.book.application.exception.BookEventException;
-import org.abondar.experimental.bookstore.search.book.application.exception.ContentEventException;
+import java.util.List;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookContentEventException;
+import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
+import org.abondar.experimental.bookstore.search.book.application.port.in.BookSearchContentQuery;
 import org.abondar.experimental.bookstore.search.book.application.port.out.BookContentRepository;
 import org.abondar.experimental.bookstore.search.book.application.port.out.BookStorageRepository;
 import org.abondar.experimental.bookstore.search.book.domain.BookContent;
 import org.abondar.experimental.bookstore.search.book.domain.BookContentDocument;
+import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -47,13 +50,13 @@ class BookContentServiceTest {
 
   @Test
   void parseFailureClosesDownloadAndDoesNotIndex() throws IOException {
-    var failure = new ContentEventException("Invalid book", new IllegalStateException());
+    var failure = new BookContentEventException("Invalid book", new IllegalStateException());
     when(storageRepository.downloadBookContent(content)).thenReturn(stream);
     when(parser.parse(content, stream)).thenThrow(failure);
 
     assertSame(
         failure,
-        assertThrows(ContentEventException.class, () -> service.upsertBookContent(content)));
+        assertThrows(BookContentEventException.class, () -> service.upsertBookContent(content)));
 
     verify(stream).close();
     verifyNoInteractions(repository);
@@ -62,13 +65,14 @@ class BookContentServiceTest {
   @Test
   void indexingFailureClosesDownload() throws IOException {
     var document = new BookContentDocument("book-id", "pdf", null, "Text");
-    var failure = new BookEventException("OpenSearch unavailable");
+    var failure = new BookMetadataEventException("OpenSearch unavailable");
     when(storageRepository.downloadBookContent(content)).thenReturn(stream);
     when(parser.parse(content, stream)).thenReturn(document);
     doThrow(failure).when(repository).upsertBookContent(document);
 
     assertSame(
-        failure, assertThrows(BookEventException.class, () -> service.upsertBookContent(content)));
+        failure,
+        assertThrows(BookMetadataEventException.class, () -> service.upsertBookContent(content)));
 
     verify(stream).close();
   }
@@ -79,8 +83,28 @@ class BookContentServiceTest {
     var cause = new IOException("Connection close failed");
     doThrow(cause).when(stream).close();
 
-    var failure = assertThrows(BookEventException.class, () -> service.upsertBookContent(content));
+    var failure =
+        assertThrows(BookMetadataEventException.class, () -> service.upsertBookContent(content));
 
     assertSame(cause, failure.getCause());
+  }
+
+  @Test
+  void contentSearchReturnsRepositoryMetadata() {
+    var query = new BookSearchContentQuery(null, "pdf", null, "Java", 10);
+    var books = List.of(new BookMetadataDocument("one", "0306406152", "Book", null, null));
+    when(repository.searchBookContent(query)).thenReturn(books);
+    assertSame(books, service.searchBookContent(query));
+    verify(repository).searchBookContent(query);
+    verifyNoInteractions(storageRepository, parser);
+  }
+
+  @Test
+  void emptyContentSearchReturnsEmptyMetadataList() {
+    var query = new BookSearchContentQuery(null, null, null, "missing", 10);
+    var books = List.<BookMetadataDocument>of();
+    when(repository.searchBookContent(query)).thenReturn(books);
+    assertSame(books, service.searchBookContent(query));
+    verifyNoInteractions(storageRepository, parser);
   }
 }

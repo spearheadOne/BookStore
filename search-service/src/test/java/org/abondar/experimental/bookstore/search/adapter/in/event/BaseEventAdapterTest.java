@@ -3,8 +3,12 @@ package org.abondar.experimental.bookstore.search.adapter.in.event;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -13,12 +17,15 @@ import java.util.concurrent.TimeUnit;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookDecoder;
 import org.abondar.experimental.bookstore.search.book.adapter.in.event.BookEventAdapter;
 import org.abondar.experimental.bookstore.search.book.adapter.out.BookOpenSearchAdapter;
-import org.abondar.experimental.bookstore.search.book.application.port.in.UpsertBookContentUseCase;
+import org.abondar.experimental.bookstore.search.book.application.port.out.BookStorageRepository;
+import org.abondar.experimental.bookstore.search.book.application.service.BookContentParser;
+import org.abondar.experimental.bookstore.search.book.application.service.BookContentService;
 import org.abondar.experimental.bookstore.search.book.application.service.BookMetadataService;
 import org.abondar.experimental.bookstore.search.catalog.adapter.in.event.CatalogDecoder;
 import org.abondar.experimental.bookstore.search.catalog.adapter.in.event.CatalogEventAdapter;
 import org.abondar.experimental.bookstore.search.catalog.adapter.out.CatalogOpenSearchAdapter;
 import org.abondar.experimental.bookstore.search.catalog.application.service.CatalogService;
+import org.abondar.experimental.bookstore.search.config.BookContentProperties;
 import org.abondar.experimental.bookstore.search.config.KafkaConfig;
 import org.abondar.experimental.bookstore.search.config.OpenSearchConfig;
 import org.abondar.experimental.bookstore.search.config.OpenSearchProperties;
@@ -133,8 +140,18 @@ public abstract class BaseEventAdapterTest {
                 "test-book-content",
                 1,
                 0));
+    context.registerBean(BookContentProperties.class, () -> new BookContentProperties(10_000_000));
     context.registerBean(
-        UpsertBookContentUseCase.class, () -> mock(UpsertBookContentUseCase.class));
+        BookStorageRepository.class,
+        () -> {
+          var storage = mock(BookStorageRepository.class);
+          when(storage.downloadBookContent(any()))
+              .thenAnswer(
+                  ignored ->
+                      new ByteArrayInputStream(
+                          "{\\rtf1\\ansi Book text\\par}".getBytes(StandardCharsets.US_ASCII)));
+          return storage;
+        });
     context.register(TestConfig.class);
     context.refresh();
     context.getBean(IndexOpenSearchAdapter.class).createIndexes();
@@ -189,6 +206,8 @@ public abstract class BaseEventAdapterTest {
     BookDecoder.class,
     BookEventAdapter.class,
     BookMetadataService.class,
+    BookContentService.class,
+    BookContentParser.class,
     IndexOpenSearchAdapter.class,
     BookOpenSearchAdapter.class,
     CatalogOpenSearchAdapter.class,

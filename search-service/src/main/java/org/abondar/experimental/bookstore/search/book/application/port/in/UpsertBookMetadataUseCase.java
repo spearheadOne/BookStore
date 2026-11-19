@@ -1,8 +1,8 @@
 package org.abondar.experimental.bookstore.search.book.application.port.in;
 
-import org.abondar.experimental.bookstore.search.book.domain.BookMetadata;
+import org.abondar.experimental.bookstore.search.book.domain.BookMetadataDocument;
 
 public interface UpsertBookMetadataUseCase {
 
-  void upsertBookMetadata(BookMetadata bookMetadata);
+  void upsertBookMetadata(BookMetadataDocument bookMetadataDocument);
 }
