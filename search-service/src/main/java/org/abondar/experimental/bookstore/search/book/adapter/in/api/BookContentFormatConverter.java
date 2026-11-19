@@ -1,4 +1,4 @@
-package org.abondar.experimental.bookstore.search.adapter.in.api;
+package org.abondar.experimental.bookstore.search.book.adapter.in.api;
 
 import org.abondar.experimental.bookstore.adapter.in.generated.searchservice.model.BookContentFormat;
 import org.springframework.core.convert.converter.Converter;

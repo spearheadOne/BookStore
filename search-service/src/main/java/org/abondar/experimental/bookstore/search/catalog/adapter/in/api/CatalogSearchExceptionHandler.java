@@ -1,4 +1,4 @@
-package org.abondar.experimental.bookstore.search.catalog.adapter.event;
+package org.abondar.experimental.bookstore.search.catalog.adapter.in.api;
 
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;

@@ -11,6 +11,8 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.abondar.experimental.bookstore.adapter.in.generated.searchservice.model.CatalogSearchResult;
+import org.abondar.experimental.bookstore.search.catalog.adapter.in.api.CatalogApiAdapter;
+import org.abondar.experimental.bookstore.search.catalog.adapter.in.api.CatalogSearchExceptionHandler;
 import org.abondar.experimental.bookstore.search.catalog.application.domain.CatalogDocument;
 import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogSearchException;
 import org.abondar.experimental.bookstore.search.catalog.application.port.in.CatalogSearchQuery;

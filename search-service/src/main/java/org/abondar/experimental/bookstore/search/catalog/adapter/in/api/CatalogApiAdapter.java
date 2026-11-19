@@ -1,4 +1,4 @@
-package org.abondar.experimental.bookstore.search.catalog.adapter.event;
+package org.abondar.experimental.bookstore.search.catalog.adapter.in.api;
 
 import java.util.List;
 import java.util.UUID;
