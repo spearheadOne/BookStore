@@ -187,7 +187,8 @@ class SecurityConfigTest {
         "/swagger-ui/index.html",
         "/v3/api-docs",
         "/v3/api-docs/swagger-config",
-        "/openapi.yaml"
+        "/openapi.yaml",
+        "/test-service-public"
       })
   void publicPathsPassSecurity(String path) {
     // These handlers are absent; security must allow the request to reach routing.
@@ -273,6 +274,11 @@ class SecurityConfigTest {
     OAuth2ResourceServerAutoConfiguration.class
   })
   static class WebConfig {
+
+    @Bean
+    String[] servicePublicPaths() {
+      return new String[] {"/test-service-public"};
+    }
 
     @Bean
     RateLimiterRegistry rateLimiterRegistry() {

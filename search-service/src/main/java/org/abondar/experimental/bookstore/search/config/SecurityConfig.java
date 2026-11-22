@@ -4,49 +4,23 @@ import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.abondar.experimental.bookstore.search.adapter.in.api.ApiRateLimitFilter;
+import org.abondar.experimental.infrastructure.security.ApiRateLimitFilter;
+import org.abondar.experimental.infrastructure.security.ResourceServerSecurityConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
+@Import(ResourceServerSecurityConfig.class)
 @EnableMethodSecurity(proxyTargetClass = true)
-@RequiredArgsConstructor
 public class SecurityConfig {
-
-  private final RateLimiterRegistry registry;
-
   @Bean
-  SecurityFilterChain securityFilterChain(
-      HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
-    return http.csrf(AbstractHttpConfigurer::disable)
-        .sessionManagement(
-            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .addFilterAfter(new ApiRateLimitFilter(registry), AuthorizationFilter.class)
-        .authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers(
-                        "/actuator/health",
-                        "/actuator/health/**",
-                        "/swagger-ui.html",
-                        "/swagger-ui/**",
-                        "/v3/api-docs/**",
-                        "/openapi.yaml")
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
-        .oauth2ResourceServer(
-            oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
-        .build();
+  ApiRateLimitFilter apiRateLimitFilter(RateLimiterRegistry registry) {
+    return ApiRateLimitFilter.apiV1(registry);
   }
 
   @Bean

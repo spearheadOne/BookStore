@@ -1,42 +1,23 @@
 package org.abondar.experimental.bookstore.config;
 
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
-import lombok.RequiredArgsConstructor;
-import org.abondar.experimental.bookstore.adapter.in.ApiRateLimitFilter;
+import org.abondar.experimental.infrastructure.security.ApiRateLimitFilter;
+import org.abondar.experimental.infrastructure.security.ResourceServerSecurityConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 
-@Configuration
-@RequiredArgsConstructor
+@Configuration(proxyBeanMethods = false)
+@Import(ResourceServerSecurityConfig.class)
 public class SecurityConfig {
-
-  private final RateLimiterRegistry registry;
+  @Bean
+  ApiRateLimitFilter apiRateLimitFilter(RateLimiterRegistry registry) {
+    return ApiRateLimitFilter.apiV1(registry);
+  }
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    return http.csrf(AbstractHttpConfigurer::disable)
-        .sessionManagement(
-            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .addFilterAfter(new ApiRateLimitFilter(registry), AuthorizationFilter.class)
-        .authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers(
-                        "/actuator/health",
-                        "/actuator/health/**",
-                        "/swagger-ui.html",
-                        "/swagger-ui/**",
-                        "/v3/api-docs/**",
-                        "/openapi.yaml")
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
-        .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
-        .build();
+  JwtAuthenticationConverter jwtAuthenticationConverter() {
+    return new JwtAuthenticationConverter();
   }
 }

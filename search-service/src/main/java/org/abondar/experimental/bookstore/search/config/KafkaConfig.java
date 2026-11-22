@@ -4,12 +4,10 @@ import org.abondar.experimental.bookstore.search.book.application.exception.Book
 import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogEventException;
 import org.apache.avro.message.BadHeaderException;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.TopicPartition;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
@@ -17,11 +15,6 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration(proxyBeanMethods = false)
 public class KafkaConfig {
-
-  @Bean(destroyMethod = "close")
-  AdminClient adminClient(KafkaAdmin kafkaAdmin) {
-    return AdminClient.create(kafkaAdmin.getConfigurationProperties());
-  }
 
   @Bean
   public DefaultErrorHandler errorHandler(
