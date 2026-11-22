@@ -55,6 +55,17 @@ application-level infrastructure imports.
   access, connection timeout and API-call timeout remain configurable. Credentials
   continue to use the AWS SDK default provider chain. Each service retains its
   `BOOK_S3_*` environment bindings and bucket usage.
+- `S3Config` explicitly imports the shared `S3HealthIndicator` (`s3` in Actuator).
+  It uses the service's existing S3 client and configured `s3.bucket` for a signed
+  `HeadBucket` request. Only that probe gets a two-second total API-call timeout (including retries) and a one-second
+  attempt timeout; object-transfer timeouts
+  remain unchanged. Missing/inaccessible buckets and SDK/network/timeout failures
+  report `DOWN` with sanitized details. The probe does not create buckets or read,
+  list or write objects. AWS general-purpose buckets require bucket-level
+  `s3:ListBucket` permission on `arn:aws:s3:::<bucket>`; see the
+  [S3 HeadBucket documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html).
+  HeadBucket's generic error statuses do not reliably distinguish a missing bucket
+  from denied access. Health detail visibility and health groups remain service-owned.
 - `KafkaHealthConfig` creates and closes the AdminClient from the service's
   `KafkaAdmin` configuration and registers `kafkaHealthIndicator`. The shared
   adapter retains a 2000 ms broker request timeout and bounded 2000 ms future
@@ -139,6 +150,8 @@ docker run --detach --name bookstore-search-service \
 docker logs bookstore-search-service
 curl --fail http://localhost:8002/actuator/health/kafka
 curl --fail http://localhost:8002/actuator/health/opensearch
+curl --fail http://localhost:8001/actuator/health/s3
+curl --fail http://localhost:8002/actuator/health/s3
 ```
 
 Both dependency checks should report `UP`. The shared root `.env` keeps

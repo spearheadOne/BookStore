@@ -3,12 +3,14 @@ package org.abondar.experimental.infrastructure.s3;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import software.amazon.awssdk.http.apache5.Apache5HttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(S3Properties.class)
+@Import(S3HealthIndicator.class)
 public class S3Config {
 
   @Bean(destroyMethod = "close")

@@ -26,7 +26,11 @@ class S3ConfigTest {
         .withPropertyValues("s3.endpoint=http://localhost:9000", "s3.path-style=true")
         .run(
             ctx -> {
-              assertThat(ctx).hasSingleBean(S3Client.class).hasSingleBean(S3Properties.class);
+              assertThat(ctx)
+                  .hasSingleBean(S3Client.class)
+                  .hasSingleBean(S3Properties.class)
+                  .hasSingleBean(S3HealthIndicator.class)
+                  .hasBean("s3HealthIndicator");
               var properties = ctx.getBean(S3Properties.class);
               assertThat(properties.bucket()).isEqualTo("books");
               assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(1));
