@@ -61,6 +61,20 @@ springdoc:
   swagger-ui:
     url: /openapi.yaml
 
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          show-details: always
+      show-details: always
+      status:
+        order: DOWN,OUT_OF_SERVICE,UP
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:8002}
+
 resilience4j:
   ratelimiter:
     instances:

@@ -3,6 +3,7 @@ package org.abondar.experimental.bookstore.search.book.adapter.out;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.search.book.application.exception.BookMetadataEventException;
 import org.abondar.experimental.bookstore.search.book.application.exception.BookSearchException;
 import org.abondar.experimental.bookstore.search.book.application.port.in.BookSearchContentQuery;
@@ -23,15 +24,11 @@ import org.opensearch.client.opensearch.core.search.Hit;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class BookOpenSearchAdapter implements BookMetadataRepository, BookContentRepository {
 
   private final OpenSearchProperties properties;
   private final OpenSearchClient client;
-
-  public BookOpenSearchAdapter(OpenSearchProperties properties, OpenSearchClient client) {
-    this.properties = properties;
-    this.client = client;
-  }
 
   @Override
   public List<BookMetadataDocument> searchBookMetadata(BookSearchMetadataQuery query) {

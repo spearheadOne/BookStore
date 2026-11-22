@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import lombok.RequiredArgsConstructor;
 import org.abondar.experimental.bookstore.search.catalog.application.domain.CatalogDocument;
 import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogEventException;
 import org.abondar.experimental.bookstore.search.catalog.application.exception.CatalogSearchException;
@@ -19,15 +20,11 @@ import org.opensearch.client.opensearch.core.search.Hit;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class CatalogOpenSearchAdapter implements CatalogRepository {
 
   private final OpenSearchProperties properties;
   private final OpenSearchClient client;
-
-  public CatalogOpenSearchAdapter(OpenSearchProperties properties, OpenSearchClient client) {
-    this.properties = properties;
-    this.client = client;
-  }
 
   @Override
   public void upsertCatalog(String catalogId, String catalogName) {

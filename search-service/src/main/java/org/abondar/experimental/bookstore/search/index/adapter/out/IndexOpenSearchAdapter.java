@@ -1,6 +1,7 @@
 package org.abondar.experimental.bookstore.search.index.adapter.out;
 
 import java.io.IOException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.abondar.experimental.bookstore.search.config.OpenSearchProperties;
 import org.abondar.experimental.bookstore.search.index.application.exception.IndexCreationFailedException;
@@ -12,16 +13,12 @@ import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class IndexOpenSearchAdapter implements IndexRepository {
 
   private final OpenSearchProperties properties;
   private final OpenSearchClient client;
-
-  public IndexOpenSearchAdapter(OpenSearchProperties properties, OpenSearchClient client) {
-    this.properties = properties;
-    this.client = client;
-  }
 
   @Override
   public void createIndexes() {
