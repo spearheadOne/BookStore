@@ -99,3 +99,8 @@ s3:
   path-style: ${BOOK_S3_PATH_STYLE:false}
   connect-timeout: ${BOOK_S3_CONNECT_TIMEOUT:1s}
   request-timeout: ${BOOK_S3_REQUEST_TIMEOUT:2m}
+
+keycloak:
+  health:
+    # Optional network address for discovery; JWT issuer validation remains unchanged.
+    discovery-uri: ${KEYCLOAK_HEALTH_DISCOVERY_URI:}

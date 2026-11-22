@@ -34,7 +34,7 @@ bootBuildImage {
             "docker.io/paketobuildpacks/java:latest"
     ]
     environment = [
-            "BP_JVM_VERSION": "25",
+            "BP_JVM_VERSION": java.toolchain.languageVersion.get().asInt().toString(),
             "BP_JVM_TYPE"   : "JRE"
     ]
     publish = false

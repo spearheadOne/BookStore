@@ -86,3 +86,8 @@ resilience4j:
         limit-for-period: 20
         limit-refresh-period: 1s
         timeout-duration: 0s
+
+keycloak:
+  health:
+    # Optional network address for discovery; JWT issuer validation remains unchanged.
+    discovery-uri: ${KEYCLOAK_HEALTH_DISCOVERY_URI:}

@@ -21,7 +21,7 @@ class KeycloakHealthIndicatorTest {
   void setUp() throws IOException {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     issuer = "http://127.0.0.1:" + server.getAddress().getPort() + "/realms/bookstore";
-    indicator = new KeycloakHealthIndicator(issuer);
+    indicator = new KeycloakHealthIndicator(issuer, "");
     server.start();
   }
 
@@ -36,6 +36,17 @@ class KeycloakHealthIndicatorTest {
     var health = indicator.health();
     assertEquals(Status.UP, health.getStatus());
     assertEquals(issuer, health.getDetails().get("issuer"));
+  }
+
+  @Test
+  void internalDiscoveryAddressStillValidatesThePublicIssuer() {
+    var publicIssuer = "http://localhost:8081/realms/bookstore";
+    indicator =
+        new KeycloakHealthIndicator(publicIssuer, issuer + "/.well-known/openid-configuration");
+    respond(200, "{\"issuer\":\"" + publicIssuer + "\"}");
+    var health = indicator.health();
+    assertEquals(Status.UP, health.getStatus());
+    assertEquals(publicIssuer, health.getDetails().get("issuer"));
   }
 
   @Test

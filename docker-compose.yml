@@ -94,7 +94,7 @@ services:
       - book_store_kafka_data:/var/lib/kafka/data
   opensearch:
     image: opensearchproject/opensearch:latest
-    container_name: opensearch
+    container_name: search-service-opensearch
     environment:
       - discovery.type=single-node
       - action.auto_create_index=false

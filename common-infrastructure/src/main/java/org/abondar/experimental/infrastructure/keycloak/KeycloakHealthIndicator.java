@@ -15,10 +15,16 @@ public class KeycloakHealthIndicator implements HealthIndicator {
 
   private final String issuer;
   private final RestClient client;
+  private final String discoveryUrl;
 
   public KeycloakHealthIndicator(
-      @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer) {
+      @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer,
+      @Value("${keycloak.health.discovery-uri:}") String discoveryUri) {
     this.issuer = issuer;
+    this.discoveryUrl =
+        discoveryUri.isBlank()
+            ? issuer.replaceAll("/+$", "") + "/.well-known/openid-configuration"
+            : discoveryUri;
     var requests = new SimpleClientHttpRequestFactory();
     requests.setConnectTimeout(Duration.ofSeconds(2));
     requests.setReadTimeout(Duration.ofSeconds(2));
@@ -27,7 +33,6 @@ public class KeycloakHealthIndicator implements HealthIndicator {
 
   @Override
   public Health health() {
-    var discoveryUrl = issuer.replaceAll("/+$", "") + "/.well-known/openid-configuration";
     try {
       var discovery = client.get().uri(discoveryUrl).retrieve().body(Discovery.class);
       if (discovery == null || !issuer.equals(discovery.issuer())) {

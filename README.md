@@ -83,3 +83,77 @@ ports, liveness/readiness decisions and dependency-specific indicators (such as
 OpenSearch) remain in the services. Shared Kafka and Keycloak health tests live in
 `common-infrastructure`; domain code, ports, persistence and generated types
 remain in their existing modules.
+
+## Local service images
+
+Both services use Java 25 from the Gradle toolchain, the Paketo Noble Java Tiny
+builder (`paketobuildpacks/builder-noble-java-tiny:latest`), its matching
+`paketobuildpacks/ubuntu-noble-run-tiny:latest` run image, and the Adoptium JRE
+buildpack. `BP_JVM_VERSION` follows the toolchain in each module. The builder and
+run image are a matching Ubuntu 24.04 pair; see the
+[Paketo builder reference](https://paketo.io/docs/reference/builders-reference/).
+
+With Docker running, build only the search image from the repository root:
+
+```sh
+./gradlew :search-service:bootBuildImage
+```
+
+The image convention is `abondar/bookstore-<service>:<project.version>`:
+`abondar/bookstore-search-service:0.0.1` and
+`abondar/bookstore-book-service:0.0.1`. To build the book image explicitly, use
+`./gradlew :book-service:bootBuildImage`. Running the unqualified
+`./gradlew bootBuildImage` at the root selects both services. Both tasks set
+`publish = false`; the images are stored only in the local Docker daemon.
+
+Kafka, OpenSearch, Keycloak and S3 addresses/credentials are runtime settings;
+they are not passed to buildpacks or baked into the image. The root `.env`
+is the shared base for credentials, issuer, buckets, topics and host-run settings.
+The combined `docker/.env-example` contains non-secret Docker overrides for both
+applications and can be used directly. Load `--env-file .env` first and
+`--env-file docker/.env-example` second; later values override the shared base.
+There are no separate per-service env files. Set `KEYCLOAK_AUDIENCE` per container.
+The example targets the existing Compose network (`bookstore_default`): Kafka uses
+`kafka:19092`, and OpenSearch uses `http://opensearch:9200`. Both containers listen
+on `8080` (API) and `8001` (management). Book maps these to the same host ports;
+search maps them to host ports `8082` and `8002` to avoid clashes. Host/IDE search
+runs use `SERVER_PORT=8082` and `MANAGEMENT_SERVER_PORT=8002`.
+A container's `localhost` refers to itself, rather than the host dependencies.
+
+```sh
+docker compose up -d kafka opensearch keycloak seaweedfs postgres redis
+docker run --detach --name bookstore-book-service \
+  --network bookstore_default --memory 2g \
+  --env-file .env --env-file docker/.env-example \
+  --env KEYCLOAK_AUDIENCE=book-service \
+  --publish 127.0.0.1:8080:8080 --publish 127.0.0.1:8001:8001 \
+  abondar/bookstore-book-service:0.0.1
+
+docker run --detach --name bookstore-search-service \
+  --network bookstore_default --memory 2g \
+  --env-file .env --env-file docker/.env-example \
+  --env KEYCLOAK_AUDIENCE=book-search \
+  --publish 127.0.0.1:8082:8080 --publish 127.0.0.1:8002:8001 \
+  abondar/bookstore-search-service:0.0.1
+
+docker logs bookstore-search-service
+curl --fail http://localhost:8002/actuator/health/kafka
+curl --fail http://localhost:8002/actuator/health/opensearch
+```
+
+Both dependency checks should report `UP`. The shared root `.env` keeps
+`KEYCLOAK_ISSUER_URI=http://localhost:8081/realms/bookstore`, matching the existing
+Keycloak's token issuer. Docker overrides fetch signing keys and health discovery
+through `keycloak:8080`. `KEYCLOAK_HEALTH_DISCOVERY_URI` changes only the probe's
+network address: the returned discovery issuer must still match the configured
+public issuer exactly. Connection/read timeouts remain two seconds; probes do not
+request tokens or use administrative credentials. Without an override, host runs
+probe the issuer's discovery endpoint as before. Both apps use the existing shared
+Keycloak. Public API documentation is at `http://localhost:8082/swagger-ui.html`.
+
+Stop and remove the application containers when finished:
+
+```sh
+docker stop bookstore-book-service bookstore-search-service
+docker rm bookstore-book-service bookstore-search-service
+```
