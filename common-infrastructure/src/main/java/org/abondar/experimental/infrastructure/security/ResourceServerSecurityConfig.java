@@ -20,7 +20,9 @@ public class ResourceServerSecurityConfig {
     "/swagger-ui.html",
     "/swagger-ui/**",
     "/v3/api-docs/**",
-    "/openapi.yaml"
+    "/openapi.yaml",
+    "/readyz",
+    "/livez"
   };
 
   @Bean

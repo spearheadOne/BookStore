@@ -111,6 +111,19 @@ services:
       - "9600:9600"
     volumes:
       - book_store_opensearch_data:/usr/share/opensearch/data
+  kong:
+    image: kong:3.9.5
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "off"
+      KONG_STATUS_LISTEN: "0.0.0.0:8100"
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8100:8100"
+    volumes:
+      - ./docker/kong/kong.yml:/etc/kong/kong.yml:ro
 
 volumes:
   book_store_keycloak_data:

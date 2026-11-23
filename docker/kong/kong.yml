@@ -1,0 +1,72 @@
+_format_version: "3.0"
+
+upstreams:
+  - name: bookstore-upstream
+    targets:
+      - target: bookstore-book-service:8080
+    healthchecks:
+      active:
+        http_path: /readyz
+        timeout: 2
+        healthy:
+          interval: 5
+          successes: 1
+          http_statuses: [ 200 ]
+        unhealthy:
+          interval: 5
+          http_failures: 2
+          tcp_failures: 2
+          timeouts: 2
+          http_statuses: [ 401, 403, 404, 500, 503 ]
+  - name: search-upstream
+    targets:
+      - target: bookstore-search-service:8080
+    healthchecks:
+      active:
+        http_path: /readyz
+        timeout: 2
+        healthy:
+          interval: 5
+          successes: 1
+          http_statuses: [ 200 ]
+        unhealthy:
+          interval: 5
+          http_failures: 2
+          tcp_failures: 2
+          timeouts: 2
+          http_statuses: [ 401, 403, 404, 500, 503 ]
+
+services:
+  - name: bookstore
+    host: bookstore-upstream
+    routes:
+      - name: bookstore-api
+        strip_path: false
+        paths:
+          - '~/api/v1/(books|authors|catalogs)(/|$)'
+      - name: bookstore-docs
+        strip_path: false
+        hosts: [ book-service-doc.localhost ]
+        methods: [ GET, HEAD ]
+        paths:
+          - '~/swagger-ui\.html$'
+          - '/swagger-ui/'
+          - '~/v3/api-docs/swagger-config$'
+          - '~/openapi\.yaml$'
+
+  - name: search
+    host: search-upstream
+    routes:
+      - name: search-api
+        strip_path: false
+        paths:
+          - '~/api/v1/search(/|$)'
+      - name: search-docs
+        hosts: [ search-service-doc.localhost ]
+        strip_path: false
+        methods: [ GET, HEAD ]
+        paths:
+          - '~/swagger-ui\.html$'
+          - '/swagger-ui/'
+          - '~/v3/api-docs/swagger-config$'
+          - '~/openapi\.yaml$'

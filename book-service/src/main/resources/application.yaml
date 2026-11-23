@@ -52,6 +52,7 @@ management:
     health:
       probes:
         enabled: true
+        add-additional-paths: true
       group:
         readiness:
           show-details: always
