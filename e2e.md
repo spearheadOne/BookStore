@@ -1,6 +1,6 @@
 # Local end-to-end testing
 
-Run `source ./local-setup.sh` from the repository root to set the URLs and token variables used below.
+Run `source ./e2e-setup.sh` from the repository root to set the URLs and token variables used below.
 
 ## Content fixtures and download checks
 

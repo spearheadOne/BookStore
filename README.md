@@ -1,172 +1,246 @@
 # BookStore
-short ddd and hexagonal arch demo
 
-## Local Keycloak
+BookStore is a backend demo of domain-driven design (DDD) and hexagonal architecture. Bookstore manages books, authors,
+and catalogs, including their relationships and PDF, EPUB, and RTF uploads. Search offers separate queries for book
+metadata, extracted document text, and catalogs. A book can have one file per format, and replacing one format preserves
+the others.
 
-Start Keycloak with `docker compose up -d keycloak` (or run `docker compose up -d`
-for all local dependencies). The admin console is at http://localhost:8081/admin
-with development credentials `book_auth` / `book_auth_pwd`. Override these on first startup
-with `KEYCLOAK_ADMIN_USERNAME` and `KEYCLOAK_ADMIN_PASSWORD`.
+## System design
 
-The `bookstore` realm and `book-service` client are imported automatically on first
-startup and persisted in a Docker volume. This follows the
-[Keycloak container startup import](https://www.keycloak.org/server/containers) workflow.
-The locally running book service already defaults to this realm's issuer;
-override it with `KEYCLOAK_ISSUER_URI` if needed.
-
-Get a development service token:
-
-```sh
-curl --fail --silent --show-error \
-  http://localhost:8081/realms/bookstore/protocol/openid-connect/token \
-  -d grant_type=client_credentials \
-  -d client_id=book-service \
-  -d client_secret=book-service-dev-secret
+```mermaid
+flowchart LR
+    Client[API client] -->|Request access token| KC[Keycloak]
+    Client -->|Bearer token| Kong[Kong Gateway]
+    Kong --> Book[Bookstore service]
+    Kong --> Search[Search service]
+    Book -->|Verify JWT| KC
+    Search -->|Verify JWT| KC
+    Book -->|Store metadata| PG[(PostgreSQL)]
+    Book -->|Cache reads| Redis[(Redis)]
+    Book -->|Store and retrieve files| S3[(SeaweedFS S3)]
+    Book -->|Publish Avro events| Kafka[(Kafka)]
+    Kafka -->|Consume events| Search
+    Search -->|Fetch file bytes| S3
+    Search -->|Index and query| OS[(OpenSearch)]
 ```
 
-Use the returned `access_token` as `Authorization: Bearer <access_token>` when
-calling the book service. The bundled credentials and `start-dev` mode are for
-local development. Startup import skips an existing realm; later realm changes
-must be applied through the admin console or Admin API.
+| Module                  | Responsibility                                                                                                                                      |
+|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `book-service`          | Owns the book, author, and catalog model. Writes metadata to PostgreSQL, uses Redis for cached reads, and stores uploaded files through the S3 API. |
+| `search-service`        | Consumes Kafka events, extracts document text with Apache Tika, and maintains OpenSearch indexes for book metadata, book content, and catalogs.     |
+| `event-contracts`       | Shared Avro schemas and generated event classes.                                                                                                    |
+| `common-infrastructure` | Shared JWT, rate limiting, Kafka health, Keycloak health, and S3 client and health configuration.                                                   |
 
-## API documentation
+The domain defines entities and value objects for books, authors, and catalogs. Application use cases coordinate work
+through ports. REST and Kafka listeners are inbound adapters, and jOOQ, Redis, S3, Kafka producers, and OpenSearch
+supply outbound adapters. The OpenAPI contracts generate the Java API interfaces and DTOs used at the HTTP boundary.
 
-The bookstore service serves Swagger UI at `http://localhost:8080/swagger-ui.html` and its source OpenAPI contract at
-`http://localhost:8080/openapi.yaml`. Swagger UI reads that contract. The shared Gradle configuration packages each
-service's `src/main/openapi/openapi.yaml` into its own build output; generated sources remain under `build/`.
+### Upload to search
 
-## Modules and shared infrastructure
-
-`book-service` and `search-service` are runnable Spring Boot applications.
-`event-contracts` contains the shared Avro contracts. `common-infrastructure` is a
-plain Java Gradle library (no Boot application, executable jar, or automatic
-configuration registration). Run `./gradlew test` or `./gradlew build` to include
-all four modules.
-
-Each application class explicitly imports `S3Config`,
-`KafkaHealthConfig`, and `KeycloakHealthIndicator` from `org.abondar.experimental.infrastructure`, outside
-both services' component-scan packages. Each configuration enables only its own
-infrastructure; adding the library dependency alone registers none of these shared beans.
-Redis slice tests bootstrap their own test-only configuration to avoid loading
-application-level infrastructure imports.
-
-- `S3Config` binds the shared `s3.*` properties and owns the S3 client and HTTP
-  transport lifecycle. Endpoint overrides remain optional; region, path-style
-  access, connection timeout and API-call timeout remain configurable. Credentials
-  continue to use the AWS SDK default provider chain. Each service retains its
-  `BOOK_S3_*` environment bindings and bucket usage.
-- `S3Config` explicitly imports the shared `S3HealthIndicator` (`s3` in Actuator).
-  It uses the service's existing S3 client and configured `s3.bucket` for a signed
-  `HeadBucket` request. Only that probe gets a two-second total API-call timeout (including retries) and a one-second
-  attempt timeout; object-transfer timeouts
-  remain unchanged. Missing/inaccessible buckets and SDK/network/timeout failures
-  report `DOWN` with sanitized details. The probe does not create buckets or read,
-  list or write objects. AWS general-purpose buckets require bucket-level
-  `s3:ListBucket` permission on `arn:aws:s3:::<bucket>`; see the
-  [S3 HeadBucket documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html).
-  HeadBucket's generic error statuses do not reliably distinguish a missing bucket
-  from denied access. Health detail visibility and health groups remain service-owned.
-- `KafkaHealthConfig` creates and closes the AdminClient from the service's
-  `KafkaAdmin` configuration and registers `kafkaHealthIndicator`. The shared
-  adapter retains a 2000 ms broker request timeout and bounded 2000 ms future
-  waits, restoring the thread interrupt flag on interruption. The health adapter
-  and indicator are components explicitly imported by this configuration. Producer/consumer
-  settings, topics, event adapters and search retry/DLT rules stay in their service.
-- The explicitly imported `KeycloakHealthIndicator` component uses the owning
-  service's JWT issuer URI. It probes only realm discovery, checks the returned
-  issuer, and uses two-second connection/read timeouts; no token issuance or
-  administrative credentials are involved.
-- Each service explicitly imports `ResourceServerSecurityConfig`, which owns the single
-  `SecurityFilterChain` bean: stateless JWT defaults and rate limiting after authorization.
-  Common health and API-documentation public paths live in the shared configuration.
-  A service can add public routes with a `String[] servicePublicPaths` bean; no bean
-  is needed when there are no additional routes. Each service supplies its JWT converter
-  and rate-limit filter as ordinary Spring beans. Servlet registration of the rate-limit filter is disabled
-  so it runs only inside the security chain, after authorization.
-  Both select `ApiRateLimitFilter.apiV1` for the current URL/method policy; a service
-  can supply different path predicates and method-to-limiter mappings through the
-  filter constructor. Named limiter settings remain in each service's `resilience4j.*`
-  configuration. Additional public routes, audiences, roles, endpoint permissions and internal
-  administration rules remain service-owned, including search's JWT role converter.
-
-Health bean names/details are preserved. Health detail visibility, management
-ports, liveness/readiness decisions and dependency-specific indicators (such as
-OpenSearch) remain in the services. Shared Kafka and Keycloak health tests live in
-`common-infrastructure`; domain code, ports, persistence and generated types
-remain in their existing modules.
-
-## Local service images
-
-Both services use Java 25 from the Gradle toolchain, the Paketo Noble Java Tiny
-builder (`paketobuildpacks/builder-noble-java-tiny:latest`), its matching
-`paketobuildpacks/ubuntu-noble-run-tiny:latest` run image, and the Adoptium JRE
-buildpack. `BP_JVM_VERSION` follows the toolchain in each module. The builder and
-run image are a matching Ubuntu 24.04 pair; see the
-[Paketo builder reference](https://paketo.io/docs/reference/builders-reference/).
-
-With Docker running, build only the search image from the repository root:
-
-```sh
-./gradlew :search-service:bootBuildImage
+```mermaid
+sequenceDiagram
+    participant C as API client
+    participant G as Kong
+    participant B as Bookstore
+    participant S3 as SeaweedFS S3
+    participant K as Kafka
+    participant S as Search
+    participant O as OpenSearch
+    C ->> G: POST /api/v1/books/{id}/content
+    G ->> B: Forward upload and bearer token
+    B ->> S3: Store file for this book and format
+    B ->> K: Publish BookContentAvailable
+    B -->> C: 204 via Kong
+    K -->> S: Deliver content event
+    S ->> S3: Read uploaded file
+    S ->> S: Extract text with Apache Tika
+    S ->> O: Index content by book ID and format
+    C ->> G: GET /api/v1/search/books/content?q=...
+    G ->> S: Forward query and bearer token
+    S ->> O: Match content and load book metadata
+    S -->> C: Matching books via Kong
 ```
 
-The image convention is `abondar/bookstore-<service>:<project.version>`:
-`abondar/bookstore-search-service:0.0.1` and
-`abondar/bookstore-book-service:0.0.1`. To build the book image explicitly, use
-`./gradlew :book-service:bootBuildImage`. Running the unqualified
-`./gradlew bootBuildImage` at the root selects both services. Both tasks set
-`publish = false`; the images are stored only in the local Docker daemon.
+Search is eventually consistent. An upload can succeed before its content appears in search. Full-text search of scanned
+PDFs requires OCR or an embedded text layer.
 
-Kafka, OpenSearch, Keycloak and S3 addresses/credentials are runtime settings;
-they are not passed to buildpacks or baked into the image. The root `.env`
-is the shared base for credentials, issuer, buckets, topics and host-run settings.
-The combined `docker/.env-example` contains non-secret Docker overrides for both
-applications and can be used directly. Load `--env-file .env` first and
-`--env-file docker/.env-example` second; later values override the shared base.
-There are no separate per-service env files. Set `KEYCLOAK_AUDIENCE` per container.
-The example targets the existing Compose network (`bookstore_default`): Kafka uses
-`kafka:19092`, and OpenSearch uses `http://opensearch:9200`. Both containers listen
-on `8080` (API) and `8001` (management). Book maps these to the same host ports;
-search maps them to host ports `8082` and `8002` to avoid clashes. Host/IDE search
-runs use `SERVER_PORT=8082` and `MANAGEMENT_SERVER_PORT=8002`.
-A container's `localhost` refers to itself, rather than the host dependencies.
+### Technology stack
 
-```sh
-docker compose up -d kafka opensearch keycloak seaweedfs postgres redis
-docker run --detach --name bookstore-book-service \
+- **Application:** Java 25, Spring Boot 4, Spring Security, Spring Actuator, Resilience4j, Gradle Wrapper.
+- **Data:** PostgreSQL, Liquibase, jOOQ, Redis, SeaweedFS (S3 API), OpenSearch.
+- **API and messaging:** OpenAPI Generator, Swagger UI, Kafka, Apache Avro, Apache Tika.
+- **Local infrastructure and tests:** Docker Compose, Kong Gateway, Keycloak, Paketo Buildpacks, JUnit, Mockito,
+  Testcontainers.
+
+## Build and run
+
+Run commands from the repository root. Install a Java 25 JDK, Docker with Compose, `curl`, and `jq`. Use the Gradle
+Wrapper in this repository.
+
+### 1. Configure and start infrastructure
+
+Create a root `.env` with the local Kafka and S3 settings before starting the stack.
+See [docker/.env-example](docker/.env-example) for the container-specific overrides.
+
+```dotenv
+BOOK_TOPIC=bookstore.book-events
+CATALOG_TOPIC=bookstore.catalog-events
+BOOK_S3_ENDPOINT=http://localhost:8333
+BOOK_S3_PATH_STYLE=true
+AWS_ACCESS_KEY_ID=book_admin
+AWS_SECRET_ACCESS_KEY=book_secret
+```
+
+```bash
+docker compose up -d --wait postgres redis kafka opensearch seaweedfs keycloak
+```
+
+Keycloak imports the [development realm](docker/keycloak/bookstore-realm.json) on first startup. Existing Keycloak
+volumes retain their realm configuration. SeaweedFS provisions the `book-store` bucket from its Compose configuration.
+If you use a different bucket, create it before starting either app.
+
+Create the book and catalog event topics and their dead-letter topics before starting the apps. Both apps use the same
+topic names from `.env`.
+
+```bash
+(
+  set -e
+  book_topic=$(sed -n 's/^BOOK_TOPIC=//p' .env)
+  catalog_topic=$(sed -n 's/^CATALOG_TOPIC=//p' .env)
+  dlt_suffix=$(sed -n 's/^DLT_PREFIX=//p' .env)
+  dlt_suffix=${dlt_suffix:-.DLT}
+
+  for topic in "$book_topic" "$catalog_topic" "$book_topic$dlt_suffix" "$catalog_topic$dlt_suffix"; do
+    docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server kafka:19092 --create --if-not-exists \
+      --topic "$topic" --partitions 1 --replication-factor 1
+  done
+)
+```
+
+### 2. Generate sources
+
+Bookstore runs Liquibase migrations automatically at startup. The jOOQ generator reads the existing PostgreSQL schema,
+so point it at a database where those migrations have already run.
+
+Generate jOOQ, OpenAPI, and Avro sources:
+
+```bash
+(
+  set -a
+  . ./.env
+  set +a
+  ./gradlew :book-service:jooqCodegen
+)
+./gradlew :book-service:openApiGenerate :search-service:openApiGenerate :event-contracts:generateAvro
+```
+
+| Generator         | Input                                          | Output                                          |
+|-------------------|------------------------------------------------|-------------------------------------------------|
+| jOOQ              | Migrated PostgreSQL `public` schema            | `book-service/build/generated-src/jooq/main`    |
+| OpenAPI Generator | Each service's `src/main/openapi/openapi.yaml` | Each service's `build/generated-src/openapi`    |
+| Avro              | `event-contracts/src/main/avro`                | `event-contracts/build/generated-src/avro/main` |
+
+OpenAPI and Avro generation are wired into compilation. Run jOOQ generation explicitly on a fresh checkout, after a
+schema change, or after cleaning the build output.
+
+### 3. Run tests and build
+
+Keep Docker running for Testcontainers integration tests.
+
+```bash
+./gradlew test
+./gradlew build
+```
+
+**Use `./gradlew test` for the normal test run. Avoid `./gradlew clean test`.** The `clean` task deletes generated
+sources from `build/`, including jOOQ sources that compilation does not regenerate. If you need a clean build, run
+`clean`, then the generation commands above, then `test` or `build`.
+
+### 4. Run the apps locally
+
+Start each app in a separate terminal. The defaults give each service its own ports and Keycloak audience. Supply any
+local overrides, including S3 credentials for content operations, through your shell or IDE run configuration.
+
+```bash
+# Terminal 1: Bookstore API on 8080, management on 8001
+./gradlew :book-service:bootRun
+```
+
+```bash
+# Terminal 2: Search API on 8082, management on 8002
+./gradlew :search-service:bootRun
+```
+
+For this mode, call the app ports directly. The checked-in Kong routes target the Docker app containers described below.
+
+### 5. Run the apps in Docker with Kong
+
+After generating sources, build the images locally with Paketo Buildpacks:
+
+```bash
+./gradlew bootBuildImage
+```
+
+Runtime settings come from `.env` and [docker/.env-example](docker/.env-example). The second file overrides host
+addresses with Docker service names. Keycloak still issues tokens with the public issuer on port 8081, and the app
+containers use the Docker network to fetch keys and discovery metadata.
+
+```bash
+docker run -d --name bookstore-book-service \
   --network bookstore_default --memory 2g \
   --env-file .env --env-file docker/.env-example \
-  --env KEYCLOAK_AUDIENCE=book-service \
-  --publish 127.0.0.1:8080:8080 --publish 127.0.0.1:8001:8001 \
+  -e KEYCLOAK_AUDIENCE=book-service \
+  -p 127.0.0.1:8001:8001 \
   abondar/bookstore-book-service:0.0.1
 
-docker run --detach --name bookstore-search-service \
+docker run -d --name bookstore-search-service \
   --network bookstore_default --memory 2g \
   --env-file .env --env-file docker/.env-example \
-  --env KEYCLOAK_AUDIENCE=book-search \
-  --publish 127.0.0.1:8082:8080 --publish 127.0.0.1:8002:8001 \
+  -e KEYCLOAK_AUDIENCE=book-search \
+  -p 127.0.0.1:8082:8080 -p 127.0.0.1:8002:8001 \
   abondar/bookstore-search-service:0.0.1
 
-docker logs bookstore-search-service
-curl --fail http://localhost:8002/actuator/health/kafka
-curl --fail http://localhost:8002/actuator/health/opensearch
-curl --fail http://localhost:8001/actuator/health/s3
-curl --fail http://localhost:8002/actuator/health/s3
+docker compose up -d kong
 ```
 
-Both dependency checks should report `UP`. The shared root `.env` keeps
-`KEYCLOAK_ISSUER_URI=http://localhost:8081/realms/bookstore`, matching the existing
-Keycloak's token issuer. Docker overrides fetch signing keys and health discovery
-through `keycloak:8080`. `KEYCLOAK_HEALTH_DISCOVERY_URI` changes only the probe's
-network address: the returned discovery issuer must still match the configured
-public issuer exactly. Connection/read timeouts remain two seconds; probes do not
-request tokens or use administrative credentials. Without an override, host runs
-probe the issuer's discovery endpoint as before. Both apps use the existing shared
-Keycloak. Public API documentation is at `http://localhost:8082/swagger-ui.html`.
+Both containers listen on port 8080 inside Docker. Kong uses their container names and probes `/readyz` on that port.
+The loopback mappings provide direct management access on 8001 and 8002 and private Search index administration on 8082.
 
-Stop and remove the application containers when finished:
+| Entry point                          | URL                                                                                                 |
+|--------------------------------------|-----------------------------------------------------------------------------------------------------|
+| Public API through Kong              | `http://localhost:8000/api/v1/…`                                                                    |
+| Bookstore Swagger UI through Kong    | [book-service-doc.localhost:8000](http://book-service-doc.localhost:8000/swagger-ui/index.html)     |
+| Search Swagger UI through Kong       | [search-service-doc.localhost:8000](http://search-service-doc.localhost:8000/swagger-ui/index.html) |
+| Kong readiness                       | `http://localhost:8100/status/ready`                                                                |
+| Bookstore and Search Actuator health | `http://localhost:8001/actuator/health`, `http://localhost:8002/actuator/health`                    |
+| Private Search index management      | `http://localhost:8082/internal/api/v1/indexes`                                                     |
+| Keycloak development console         | `http://localhost:8081/admin`                                                                       |
 
-```sh
-docker stop bookstore-book-service bookstore-search-service
-docker rm bookstore-book-service bookstore-search-service
+### 6. Create Search indexes after startup
+
+Once Search is running, create its indexes through the private endpoint before sending Bookstore writes that produce
+indexing events. The request requires a Search admin token.
+
+```bash
+ADMIN_TOKEN=$(curl -fsS --user 'book-search-admin:book-search-admin-dev-secret' \
+  --data 'grant_type=client_credentials' \
+  http://localhost:8081/realms/bookstore/protocol/openid-connect/token | jq -er '.access_token')
+
+curl -fsS -w 'HTTP %{http_code}\n' -X POST \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8082/internal/api/v1/indexes
 ```
+
+Expect `HTTP 201`. Index creation preserves existing indexes.
+
+### 7. Run end-to-end tests
+
+With both containers and Kong running, source the helper from the repository root:
+
+```bash
+source ./e2e-setup.sh
+```
+
+The script checks Kong and Search readiness and sets the URLs and Keycloak tokens in your shell. Follow [e2e.md](e2e.md)
+for the curl scenarios, fixtures, and recorded results.
