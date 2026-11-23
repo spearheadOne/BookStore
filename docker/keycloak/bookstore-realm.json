@@ -1,6 +1,7 @@
 {
   "realm": "bookstore",
   "enabled": true,
+  "accessTokenLifespan": 3600,
   "sslRequired": "external",
   "registrationAllowed": false,
   "clients": [
